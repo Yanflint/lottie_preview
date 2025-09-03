@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lottie-превью 360×800</title>
+
+  <!-- [ANCHOR:SCRIPTS_INCLUDE] Lottie Web -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js" defer></script>
+
+  <style>
+    /* [ANCHOR:CSS_VARS] */
+    :root { --h: 800px; --ctl-h: 30px; --safe-bottom: 8px; }
+
+    /* [ANCHOR:CSS_BASE] */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; background: #0f0f10; color: #e8e8e8; font-family: -apple-system, Segoe UI, Roboto, Inter, Arial; }
+
+    /* [ANCHOR:APP_WRAP] */
+    .app { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+    /* [ANCHOR:FULLSCREEN_CLASSES] */
+    body.fs { overflow: hidden; }
+    .app.fs { max-width: none; padding: 0; }
+    body.fs .mode { position: fixed; left: 50%; bottom: var(--safe-bottom); transform: translateX(-50%); z-index: 1000; background: transparent; padding: 0; }
+
+    /* [ANCHOR:LAYOUT_WRAPPER] */
+    .wrapper { width: 360px; height: var(--h); position: relative; overflow: hidden; background:#1a1a1b; border:none; }
+    .stage   { width:100%; height:100%; position:relative; background:#1a1a1b; }
+
+    /* [ANCHOR:LAYERS] */
+    .bg, .lottie-layer { position:absolute; inset:0; }
+
+    /* [ANCHOR:LAYER_BG] */
+    .bg { background-size: auto 100%; background-position: center; background-repeat:no-repeat; background-color:#1a1a1b; }
+
+    /* [ANCHOR:LAYER_LOTTIE] */
+    .lottie-layer { display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .lottie-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    .lottie-layer svg, .lottie-layer canvas {
+      height:100% !important; width:auto !important; max-width:none !important;
+      display:block !important; position:static !important; margin:0 auto !important;
+      left:auto !important; right:auto !important;
+    }
+
+    /* [ANCHOR:MODE_PANEL] */
+    .mode { display:flex; flex-wrap:wrap; gap:8px; font-size:12px; align-items:center; justify-content:center; }
+    .mode input[type="file"] { display:none; }
+
+    /* [ANCHOR:BUTTON_STYLES] */
+    .btn, .chk { height:var(--ctl-h); padding:0 10px; display:inline-flex; align-items:center; gap:6px; background:#2a2a2a; color:#e8e8e8; border:none; border-radius:6px; font-size:12px; line-height:1; cursor:pointer; user-select:none; }
+    .btn:active { opacity:.85; }
+    .chk input[type="checkbox"] { width:14px; height:14px; margin:0; }
+  </style>
+</head>
+<body>
+  <div class="app"><!-- [ANCHOR:APP_ROOT] -->
+    <div id="wrapper" class="wrapper"><!-- [ANCHOR:PREVIEW_WRAPPER] -->
+      <div id="stage" class="stage"><!-- [ANCHOR:PREVIEW_STAGE] -->
+        <div id="bg" class="bg"></div><!-- [ANCHOR:BG_LAYER] -->
+        <div class="lottie-layer"><div id="lottie" class="lottie-container"></div></div><!-- [ANCHOR:LOTTIE_LAYER] -->
+      </div>
+    </div>
+
+    <!-- [ANCHOR:CONTROL_PANEL] -->
+    <div class="mode" id="mode">
+      <!-- [ANCHOR:CTL_UPLOADS] -->
+      <label class="btn" for="bgInput">Фон</label>
+      <input id="bgInput" type="file" accept="image/*">
+      <label class="btn" for="lotInput">Lottie</label>
+      <input id="lotInput" type="file" accept="application/json,.json">
+
+      <!-- [ANCHOR:CTL_SIZE] -->
+      <button class="btn" id="sizeBtn">Ширина: 360px</button>
+      <button class="btn" id="heightBtn">Высота: 800</button>
+
+      <!-- [ANCHOR:CTL_PLAYBACK] -->
+      <button class="btn" id="restartBtn" title="Повторить анимацию">Повтор</button>
+      <label class="chk" title="Играть зацикленно"><input type="checkbox" id="loopChk"> Зацикленно</label>
+
+      <!-- [ANCHOR:CTL_SHARE] -->
+      <button class="btn" id="shareBtn" title="Сохранить на Netlify и получить короткую ссылку">Поделиться</button>
+    </div>
+  </div>
+
+  <!-- [ANCHOR:APP_SCRIPT] -->
+  <script src="app.js"></script>
+</body>
+</html>
