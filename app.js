@@ -1,5 +1,8 @@
 'use strict';
 
+/* [ANCHOR:VERSION_CONST] */
+const VERSION = 'v27-mobile-fitH';
+
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -8,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var stage       = document.getElementById('stage');
   var bgEl        = document.getElementById('bg');
   var toastEl     = document.getElementById('toast');
+  var verEl       = document.getElementById('ver');
 
   var bgInput     = document.getElementById('bgInput');
   var lotInput    = document.getElementById('lotInput');
@@ -22,16 +26,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* [ANCHOR:STATE] */
   var anim = null, animName = null;
-  var wide = false;     // 360 / 1000 (база ширины для десктопа)
+  var wide = false;     // 360 / 1000 (десктоп)
   var fullH = false;    // 800 / экран (десктоп)
   var bgDataUrl = null; // фон как dataURL
   var lastLottieJSON = null;
 
+  /* [ANCHOR:VERSION_SET] */
+  if (verEl) verEl.textContent = VERSION;
+
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); }
-
-  /* [ANCHOR:TOAST_API] */
   function showToast(msg){
     if (!toastEl) return;
     toastEl.textContent = msg;
@@ -77,9 +82,9 @@ document.addEventListener('DOMContentLoaded', function () {
     while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
   }
 
-  /* [ANCHOR:APPLY_SCALE] — десктопный режим (мобильный игнорирует) */
+  /* [ANCHOR:APPLY_SCALE] — десктоп (мобайл управляется CSS) */
   function applyScale(){
-    if (MOBILE) return; // на телефоне всегда «по ширине», размеры задаёт CSS .is-mobile
+    if (MOBILE) return;
     var baseW = wide ? 1000 : 360;
     var baseH = 800;
     var SAFE_BOTTOM = 8;
@@ -94,8 +99,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
     if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
   }
-
-  /* [ANCHOR:EVENT_BINDINGS] */
   if (!MOBILE) {
     sizeBtn && sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
     heightBtn && heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
@@ -122,7 +125,8 @@ document.addEventListener('DOMContentLoaded', function () {
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    var preserve = MOBILE ? 'xMidYMid meet' : 'xMidYMid slice'; // мобайл — по ширине без обрезки
+    // телефон — fit по высоте превью; десктоп — как прежде (по высоте)
+    var preserve = MOBILE ? 'xMidYMid meet' : 'xMidYMid slice';
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
@@ -139,30 +143,22 @@ document.addEventListener('DOMContentLoaded', function () {
           var svg = lottieContainer.querySelector('svg');
           var canvas = lottieContainer.querySelector('canvas');
 
+          if (svg) {
+            svg.removeAttribute('width'); svg.removeAttribute('height');
+            svg.style.position='static'; svg.style.margin='0 auto';
+          }
+          if (canvas) {
+            canvas.style.position='static'; canvas.style.margin='0 auto';
+          }
+
           if (MOBILE) {
-            // масштабирование «по ширине»
-            if (svg) {
-              svg.removeAttribute('width'); svg.removeAttribute('height');
-              svg.style.width = '100%'; svg.style.height = 'auto';
-              svg.style.position='static'; svg.style.margin='0 auto';
-              svg.setAttribute('preserveAspectRatio','xMidYMid meet');
-            }
-            if (canvas) {
-              canvas.style.width='100%'; canvas.style.height='auto';
-              canvas.style.position='static'; canvas.style.margin='0 auto';
-            }
+            // [ANCHOR:LOTTIE_MOBILE_HEIGHT] — по высоте превью, центр по X
+            if (svg)   { svg.style.height='100%'; svg.style.width='auto'; svg.setAttribute('preserveAspectRatio','xMidYMid meet'); }
+            if (canvas){ canvas.style.height='100%'; canvas.style.width='auto'; }
           } else {
-            // десктоп как раньше — по высоте
-            if (svg) {
-              svg.removeAttribute('width'); svg.removeAttribute('height');
-              svg.style.height='100%'; svg.style.width='auto';
-              svg.style.position='static'; svg.style.margin='0 auto';
-              svg.setAttribute('preserveAspectRatio','xMidYMid slice');
-            }
-            if (canvas) {
-              canvas.style.height='100%'; canvas.style.width='auto';
-              canvas.style.position='static'; canvas.style.margin='0 auto';
-            }
+            // десктоп — как было (по высоте)
+            if (svg)   { svg.style.height='100%'; svg.style.width='auto'; svg.setAttribute('preserveAspectRatio','xMidYMid slice'); }
+            if (canvas){ canvas.style.height='100%'; canvas.style.width='auto'; }
           }
         } catch(_){}
       });
@@ -182,11 +178,21 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsText(file, 'utf-8');
   });
 
-  /* [ANCHOR:RESTART] */
+  /* [ANCHOR:RESTART] — десктоп-кнопка */
   restartBtn && restartBtn.addEventListener('click', function(){
     if (!anim) return;
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
+
+  /* [ANCHOR:MOBILE_TAP_RESTART] — на телефоне тап по превью = повтор анимации */
+  if (MOBILE) {
+    wrapper.addEventListener('click', function(e){
+      // (панели нет, но на всякий не реагируем на гипотетические контролы)
+      if (e.target.closest && e.target.closest('.mode')) return;
+      if (!anim) return;
+      try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
+    });
+  }
 
   /* [ANCHOR:LOOP_TOGGLE] */
   loopChk && loopChk.addEventListener('change', function(){
@@ -196,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:SHARE_ACTION] — короткая ссылка без alert */
+  /* [ANCHOR:SHARE_ACTION] — короткая ссылка без alert (тост) */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToast('Загрузи Lottie'); return; }
@@ -210,12 +216,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var data = await resp.json();
         var link = location.origin + location.pathname + '?id=' + encodeURIComponent(data.id);
 
-        // Тихое копирование (без модальных диалогов)
         try {
           await navigator.clipboard.writeText(link);
           showToast('Ссылка скопирована');
         } catch(_) {
-          // фолбэк без алерта
           var ta = document.createElement('textarea');
           ta.value = link; document.body.appendChild(ta);
           ta.style.position='fixed'; ta.style.left='-9999px';
@@ -229,7 +233,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* [ANCHOR:LOAD_FROM_LINK] — загрузка по короткой ссылке (Netlify Blobs) */
+  /* [ANCHOR:LOAD_FROM_LINK] — Netlify Blobs */
   (async function loadIfLinked(){
     var id = new URLSearchParams(location.search).get('id');
     if (!id) return;
@@ -247,20 +251,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   })();
 
-  /* [ANCHOR:ON_MOBILE_INIT] — сразу «разворачиваемся» на телефоне */
+  /* [ANCHOR:MOBILE_INIT_SCROLL] — небольшое «сжатие» UI браузера на мобилках */
   if (MOBILE) {
-    // обновляем кастомный vh, чтобы 100dvh вела себя одинаково
-    function updateVh(){ 
-      var h = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-      document.documentElement.style.setProperty('--vh', (h * 0.01) + 'px');
-    }
-    updateVh();
-    window.visualViewport && window.visualViewport.addEventListener('resize', updateVh);
-    window.addEventListener('resize', updateVh);
-
-    // небольшой «пинок», чтобы скрыть часть UI браузера
     setTimeout(function(){ window.scrollTo(0, 1); }, 200);
     setTimeout(function(){ window.scrollTo(0, 0); }, 600);
   }
-
 });
