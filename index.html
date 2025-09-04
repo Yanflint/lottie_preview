@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <!-- [ANCHOR:VIEWPORT] обновлённый мета-тег для «кино» полноэкрана -->
+  <!-- [ANCHOR:VIEWPORT] -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Lottie-превью 360×800</title>
 
@@ -11,7 +11,7 @@
 
   <style>
     /* [ANCHOR:CSS_VARS] */
-    :root { --h: 800px; --ctl-h: 30px; --safe-bottom: 8px; }
+    :root { --h: 800px; --ctl-h: 30px; --safe-bottom: 8px; --vh: 1vh; }
 
     /* [ANCHOR:CSS_BASE] */
     * { box-sizing: border-box; }
@@ -21,24 +21,13 @@
     /* [ANCHOR:APP_WRAP] */
     .app { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 
-    /* [ANCHOR:FULLSCREEN_CLASSES] */
-    body.fs { overflow: hidden; }
-    .app.fs { max-width: none; padding: 0; }
-
-    /* По-настоящему «кино»: в fullscreen скрываем панель контролов полностью */
-    body.fs .mode { display: none !important; }
-
     /* [ANCHOR:LAYOUT_WRAPPER] */
-    .wrapper { width: 360px; height: var(--h); position: relative; overflow: hidden; background:#1a1a1b; border:none; }
-    .stage   { width:100%; height:100%; position:relative; background:#1a1a1b; }
+    .wrapper { width: 360px; height: var(--h); position: relative; overflow: hidden; background:#000; border:none; }
+    .stage   { width:100%; height:100%; position:relative; background:#000; }
 
     /* [ANCHOR:LAYERS] */
     .bg, .lottie-layer { position:absolute; inset:0; }
-
-    /* [ANCHOR:LAYER_BG] */
-    .bg { background-size: auto 100%; background-position: center; background-repeat:no-repeat; background-color:#1a1a1b; }
-
-    /* [ANCHOR:LAYER_LOTTIE] */
+    .bg { background-size: auto 100%; background-position: center; background-repeat:no-repeat; background-color:#000; }
     .lottie-layer { display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .lottie-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     .lottie-layer svg, .lottie-layer canvas {
@@ -47,7 +36,7 @@
       left:auto !important; right:auto !important;
     }
 
-    /* [ANCHOR:MODE_PANEL] */
+    /* [ANCHOR:MODE_PANEL] — панель кнопок для десктопа */
     .mode { display:flex; flex-wrap:wrap; gap:8px; font-size:12px; align-items:center; justify-content:center; }
     .mode input[type="file"] { display:none; }
 
@@ -56,71 +45,62 @@
     .btn:active { opacity:.85; }
     .chk input[type="checkbox"] { width:14px; height:14px; margin:0; }
 
-    /* [ANCHOR:MOBILE_VISIBILITY] показать/спрятать элементы */
-    .mobile-only  { display: none; }
-    .desktop-only { display: inline-flex; }
-
-    body.is-mobile .mobile-only  { display: inline-flex; }
-    body.is-mobile .desktop-only { display: none; }
-
-    /* CSS-фолбэк для мобил */
-    @media (pointer: coarse) and (max-width: 960px) {
-      .mobile-only  { display: inline-flex; }
-      .desktop-only { display: none; }
-    }
-
-    /* [ANCHOR:FULLSCREEN_STYLES] — заставляем сцену занимать весь экран */
-    .wrapper:fullscreen,
-    .wrapper:-webkit-full-screen {
-      width: 100vw !important;
-      height: 100vh !important;
-      max-width: 100vw !important;
-      max-height: 100vh !important;
-      background: #000; /* чтобы не было светлых полей */
-    }
-    /* Внутренние слои в fullscreen по краям экрана, учитывая вырезы */
-    .wrapper:fullscreen .stage,
-    .wrapper:-webkit-full-screen .stage {
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    /* [ANCHOR:MOBILE_MODE] — на телефонах скрываем всю панель, растягиваем обёртку на экран */
+    body.is-mobile .mode { display: none !important; }
+    body.is-mobile .app { max-width: none; padding: 0; }
+    body.is-mobile { overflow: hidden; }
+    body.is-mobile .wrapper {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100dvh; /* без прокрутки; адресная строка по возможности сжимается */
       background: #000;
     }
+    /* Ключ: на мобиле масштабируем «по ширине» */
+    body.is-mobile .bg { background-size: 100% auto; } /* по ширине */
+    body.is-mobile .lottie-layer svg,
+    body.is-mobile .lottie-layer canvas {
+      width:100% !important; height:auto !important; /* по ширине */
+    }
+
+    /* [ANCHOR:TOAST_CSS] — тихий тост для копирования */
+    .toast {
+      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+      padding: 10px 12px; background: rgba(0,0,0,.75); color: #fff; border-radius: 10px;
+      font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s ease-out;
+      z-index: 1000; backdrop-filter: blur(4px);
+    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
   <div class="app"><!-- [ANCHOR:APP_ROOT] -->
-    <div id="wrapper" class="wrapper"><!-- [ANCHOR:PREVIEW_WRAPPER] -->
+    <div id="wrapper" class="wrapper" aria-label="Превью Lottie" role="application"><!-- [ANCHOR:PREVIEW_WRAPPER] -->
       <div id="stage" class="stage"><!-- [ANCHOR:PREVIEW_STAGE] -->
         <div id="bg" class="bg"></div><!-- [ANCHOR:BG_LAYER] -->
         <div class="lottie-layer"><div id="lottie" class="lottie-container"></div></div><!-- [ANCHOR:LOTTIE_LAYER] -->
       </div>
     </div>
 
-    <!-- [ANCHOR:CONTROL_PANEL] -->
+    <!-- [ANCHOR:CONTROL_PANEL] — только на десктопе -->
     <div class="mode" id="mode">
-      <!-- десктопные контролы -->
-      <label class="btn desktop-only" for="bgInput">Фон</label>
+      <label class="btn" for="bgInput">Фон</label>
       <input id="bgInput" type="file" accept="image/*">
-      <label class="btn desktop-only" for="lotInput">Lottie</label>
+      <label class="btn" for="lotInput">Lottie</label>
       <input id="lotInput" type="file" accept="application/json,.json">
 
-      <button class="btn desktop-only" id="sizeBtn">Ширина: 360px</button>
-      <button class="btn desktop-only" id="heightBtn">Высота: 800</button>
+      <button class="btn" id="sizeBtn">Ширина: 360px</button>
+      <button class="btn" id="heightBtn">Высота: 800</button>
 
-      <button class="btn desktop-only" id="restartBtn" title="Повторить анимацию">Повтор</button>
-      <label class="chk desktop-only" title="Играть зацикленно"><input type="checkbox" id="loopChk"> Зацикленно</label>
+      <button class="btn" id="restartBtn" title="Повторить анимацию">Повтор</button>
+      <label class="chk" title="Играть зацикленно"><input type="checkbox" id="loopChk"> Зацикленно</label>
 
-      <!-- если пользуешься Netlify Blobs -->
-      <button class="btn desktop-only" id="shareBtn" title="Сохранить и получить короткую ссылку">Поделиться</button>
-
-      <!-- [ANCHOR:CTL_MOBILE] единственная кнопка на телефоне -->
-      <button class="btn mobile-only" id="fsBtn" title="Развернуть на весь экран">Развернуть</button>
+      <button class="btn" id="shareBtn" title="Сохранить и получить короткую ссылку">Поделиться</button>
     </div>
   </div>
 
-  <!-- [ANCHOR:APP_SCRIPT] анти-кэш по версии -->
-  <script src="app.js?v=11"></script>
+  <!-- [ANCHOR:TOAST_NODE] -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- [ANCHOR:APP_SCRIPT] анти-кэш -->
+  <script src="app.js?v=22"></script>
 </body>
 </html>
