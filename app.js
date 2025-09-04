@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var sizeBtn     = document.getElementById('sizeBtn');
   var heightBtn   = document.getElementById('heightBtn');
   var shareBtn    = document.getElementById('shareBtn');
-  var fsBtn       = document.getElementById('fsBtn'); // <-- новая кнопка
+  var fsBtn       = document.getElementById('fsBtn'); // мобильная
 
   var lottieLayer     = stage.querySelector('.lottie-layer');
   var lottieContainer = document.getElementById('lottie');
@@ -37,11 +37,14 @@ document.addEventListener('DOMContentLoaded', function () {
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); }
 
-  /* [ANCHOR:MOBILE_DETECT] простая эвристика */
+  /* [ANCHOR:MOBILE_DETECT] расширенный детектор */
   function isMobile() {
+    var ua = navigator.userAgent || '';
+    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    var narrow = window.matchMedia('(max-width: 820px)').matches;
-    return touch && narrow;
+    var smallScreen = Math.min(screen.width, screen.height) <= 820 || window.innerWidth <= 920;
+    var uaMobile = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
+    return (coarse || touch || uaMobile) && smallScreen;
   }
   var MOBILE = isMobile();
   if (MOBILE) document.body.classList.add('is-mobile');
@@ -84,20 +87,18 @@ document.addEventListener('DOMContentLoaded', function () {
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    // На телефоне ширину/высоту не показываем — кнопок нет.
     if (!MOBILE) {
-      sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
-      heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
+      if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
+      if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
     }
   }
 
   /* [ANCHOR:EVENT_BINDINGS] */
   if (!MOBILE) {
-    sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
-    heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
+    sizeBtn && sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
+    heightBtn && heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
     window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
   } else {
-    // На мобиле реагируем на поворот/изменение панели
     window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
   }
   applyScale();
@@ -177,32 +178,74 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:FULLSCREEN_API] кнопка мобильного разворота */
+  /* [ANCHOR:FULLSCREEN_API] мобильная кнопка «Развернуть» */
   async function enterFullscreen() {
-    // пробуем Fullscreen API
     var el = document.documentElement;
     try {
       if (el.requestFullscreen)       await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // iOS Safari 16+
-    } catch(_) { /* игнор */ }
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // iOS Safari
+    } catch(_) { /* ignore */ }
 
-    // включаем наш «экранный» режим и пересчитываем размеры
     fullH = true;
     applyScale();
 
-    // небольшие трюки для скрытия адресной строки
+    // попытка скрыть адресную строку
     setTimeout(function(){ window.scrollTo(0, 1); }, 300);
     setTimeout(function(){ window.scrollTo(0, 0); }, 600);
 
-    // по возможности — блокируем ориентацию в портрет
     if (screen.orientation && screen.orientation.lock) {
       try { await screen.orientation.lock('portrait'); } catch(_) {}
     }
   }
   fsBtn && fsBtn.addEventListener('click', enterFullscreen);
 
-  /* [ANCHOR:LOAD_FROM_LINK] — если используешь Netlify Blobs, блок оставь как был */
-  // (ничего не меняем тут; твои функции /api/share и /api/shot продолжают работать)
+  /* [ANCHOR:SHARE_ACTION] — Netlify Blobs (если используешь) */
+  if (shareBtn){
+    shareBtn.addEventListener('click', async function(){
+      if (!lastLottieJSON){ alert('Загрузи Lottie перед шарингом.'); return; }
+      try {
+        var payload = {
+          v:1,
+          lot: lastLottieJSON,
+          bg:  bgDataUrl || null,
+          opts: { loop: !!(loopChk && loopChk.checked), wide: !!wide, fullH: !!fullH }
+        };
+        var resp = await fetch('/api/share', {
+          method:'POST',
+          headers:{ 'content-type':'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error('share failed');
+        var data = await resp.json();
+        var link = location.origin + location.pathname + '?id=' + encodeURIComponent(data.id);
+        try { await navigator.clipboard.writeText(link); } catch(_){}
+        alert('Ссылка скопирована:\n' + link);
+      } catch(err) {
+        console.error(err);
+        alert('Не удалось создать шаринг.');
+      }
+    });
+  }
+
+  /* [ANCHOR:LOAD_FROM_LINK] — загрузка по короткой ссылке */
+  (async function loadIfLinked(){
+    var id = new URLSearchParams(location.search).get('id');
+    if (!id) return;
+    try {
+      var resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
+      if (!resp.ok) throw new Error('404');
+      var snap = await resp.json();
+
+      if (snap.opts){ wide = !!snap.opts.wide; fullH = !!snap.opts.fullH; if (loopChk) loopChk.checked = !!snap.opts.loop; }
+      applyScale();
+
+      if (snap.bg) { bgDataUrl = snap.bg; bgEl.style.backgroundImage = 'url(' + bgDataUrl + ')'; }
+      if (snap.lot){ lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
+    } catch(e){
+      console.error(e);
+      alert('Не удалось загрузить данные по ссылке.');
+    }
+  })();
 
   /* [ANCHOR:CLEANUP] */
   window.addEventListener('unload', function(){ /* no-op */ });
