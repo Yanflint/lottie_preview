@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var wrapper     = document.getElementById('wrapper');
   var stage       = document.getElementById('stage');
   var bgEl        = document.getElementById('bg');
+  var toastEl     = document.getElementById('toast');
 
   var bgInput     = document.getElementById('bgInput');
   var lotInput    = document.getElementById('lotInput');
@@ -15,32 +16,31 @@ document.addEventListener('DOMContentLoaded', function () {
   var sizeBtn     = document.getElementById('sizeBtn');
   var heightBtn   = document.getElementById('heightBtn');
   var shareBtn    = document.getElementById('shareBtn');
-  var fsBtn       = document.getElementById('fsBtn'); // мобильная
 
   var lottieLayer     = stage.querySelector('.lottie-layer');
   var lottieContainer = document.getElementById('lottie');
 
-  /* [ANCHOR:FS_DOM] */
-  var appRoot = document.querySelector('.app');
-
   /* [ANCHOR:STATE] */
   var anim = null, animName = null;
-  var wide = false;     // 360 / 1000 (база ширины)
-  var fullH = false;    // 800 / экран
+  var wide = false;     // 360 / 1000 (база ширины для десктопа)
+  var fullH = false;    // 800 / экран (десктоп)
   var bgDataUrl = null; // фон как dataURL
   var lastLottieJSON = null;
-
-  /* [ANCHOR:ANTICACHE] */
-  try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(e){}
 
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); }
-  function isFullscreen() {
-    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+  /* [ANCHOR:TOAST_API] */
+  function showToast(msg){
+    if (!toastEl) return;
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){ toastEl.classList.remove('show'); }, 1600);
   }
 
-  /* [ANCHOR:MOBILE_DETECT] расширенный детектор */
+  /* [ANCHOR:MOBILE_DETECT] */
   function isMobile() {
     var ua = navigator.userAgent || '';
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -51,6 +51,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   var MOBILE = isMobile();
   if (MOBILE) document.body.classList.add('is-mobile');
+
+  /* [ANCHOR:ANTICACHE] */
+  try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(e){}
 
   /* [ANCHOR:RESET] */
   function renewLottieRoot(){
@@ -74,39 +77,30 @@ document.addEventListener('DOMContentLoaded', function () {
     while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
   }
 
-  /* [ANCHOR:APPLY_SCALE] */
+  /* [ANCHOR:APPLY_SCALE] — десктопный режим (мобильный игнорирует) */
   function applyScale(){
+    if (MOBILE) return; // на телефоне всегда «по ширине», размеры задаёт CSS .is-mobile
     var baseW = wide ? 1000 : 360;
     var baseH = 800;
-
-    // если в Fullscreen — никакого «безопасного» отступа
-    var SAFE_BOTTOM = isFullscreen() ? 0 : 8;
+    var SAFE_BOTTOM = 8;
 
     var winH    = window.innerHeight || baseH;
     var targetH = fullH ? Math.max(1, winH - SAFE_BOTTOM) : baseH;
     var targetW = fullH ? Math.round(baseW * (targetH / baseH)) : baseW;
 
-    if (fullH || isFullscreen()) { document.body.classList.add('fs'); if (appRoot) appRoot.classList.add('fs'); }
-    else                         { document.body.classList.remove('fs'); if (appRoot) appRoot.classList.remove('fs'); }
-
-    // Если в настоящем fullscreen — размеры берёт CSS (:fullscreen). Оставим JS-установку для пред/пост перехода.
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    if (!MOBILE) {
-      if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
-      if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
-    }
+    if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
+    if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
   }
 
   /* [ANCHOR:EVENT_BINDINGS] */
   if (!MOBILE) {
     sizeBtn && sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
     heightBtn && heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
+    window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
   }
-  window.addEventListener('resize', function(){ if (fullH || isFullscreen()) applyScale(); });
-  document.addEventListener('fullscreenchange', applyScale);
-  document.addEventListener('webkitfullscreenchange', applyScale);
   applyScale();
 
   /* [ANCHOR:BG_UPLOAD] */
@@ -128,29 +122,47 @@ document.addEventListener('DOMContentLoaded', function () {
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
+    var preserve = MOBILE ? 'xMidYMid meet' : 'xMidYMid slice'; // мобайл — по ширине без обрезки
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
         container: lottieContainer,
         renderer: 'svg',
-        loop: MOBILE ? true : !!(loopChk && loopChk.checked),
+        loop: !!(loopChk && loopChk.checked),
         autoplay: true,
         animationData: JSON.parse(JSON.stringify(animationData)),
-        rendererSettings: { progressiveLoad:false, className:'lot-'+animName, preserveAspectRatio:'xMidYMid slice' }
+        rendererSettings: { progressiveLoad:false, className:'lot-'+animName, preserveAspectRatio: preserve }
       });
 
       anim.addEventListener('DOMLoaded', function(){
         try {
           var svg = lottieContainer.querySelector('svg');
-          if (svg) {
-            svg.removeAttribute('width'); svg.removeAttribute('height');
-            svg.style.height='100%'; svg.style.width='auto'; svg.style.position='static'; svg.style.margin='0 auto';
-            svg.style.left=''; svg.style.right=''; svg.setAttribute('preserveAspectRatio','xMidYMid slice');
-          }
           var canvas = lottieContainer.querySelector('canvas');
-          if (canvas) {
-            canvas.style.height='100%'; canvas.style.width='auto'; canvas.style.position='static';
-            canvas.style.margin='0 auto'; canvas.style.left=''; canvas.style.right='';
+
+          if (MOBILE) {
+            // масштабирование «по ширине»
+            if (svg) {
+              svg.removeAttribute('width'); svg.removeAttribute('height');
+              svg.style.width = '100%'; svg.style.height = 'auto';
+              svg.style.position='static'; svg.style.margin='0 auto';
+              svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+            }
+            if (canvas) {
+              canvas.style.width='100%'; canvas.style.height='auto';
+              canvas.style.position='static'; canvas.style.margin='0 auto';
+            }
+          } else {
+            // десктоп как раньше — по высоте
+            if (svg) {
+              svg.removeAttribute('width'); svg.removeAttribute('height');
+              svg.style.height='100%'; svg.style.width='auto';
+              svg.style.position='static'; svg.style.margin='0 auto';
+              svg.setAttribute('preserveAspectRatio','xMidYMid slice');
+            }
+            if (canvas) {
+              canvas.style.height='100%'; canvas.style.width='auto';
+              canvas.style.position='static'; canvas.style.margin='0 auto';
+            }
           }
         } catch(_){}
       });
@@ -184,63 +196,40 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:FULLSCREEN_API] мобильная «Развернуть» — как у кино */
-  async function enterFullscreen() {
-    try {
-      // Просим fullscreen на самом wrapper (лучше для Safari)
-      if (wrapper.requestFullscreen) {
-        await wrapper.requestFullscreen({ navigationUI: 'hide' }).catch(()=>{});
-      } else if (wrapper.webkitRequestFullscreen) {
-        wrapper.webkitRequestFullscreen(); // iOS Safari
-      } else if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(()=>{});
-      }
-    } catch(_) { /* ignore */ }
-
-    // На всякий — включаем наш «экранный» режим
-    fullH = true;
-    applyScale();
-
-    // Спрятать адресную строку/жестовую панель по возможности
-    setTimeout(function(){ window.scrollTo(0, 1); }, 300);
-    setTimeout(function(){ window.scrollTo(0, 0); }, 800);
-
-    // Повернуть в портрет (если доступно)
-    if (screen.orientation && screen.orientation.lock) {
-      try { await screen.orientation.lock('portrait'); } catch(_) {}
-    }
-  }
-  fsBtn && fsBtn.addEventListener('click', enterFullscreen);
-
-  /* [ANCHOR:SHARE_ACTION] — Netlify Blobs (если используешь) */
+  /* [ANCHOR:SHARE_ACTION] — короткая ссылка без alert */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
-      if (!lastLottieJSON){ alert('Загрузи Lottie перед шарингом.'); return; }
+      if (!lastLottieJSON){ showToast('Загрузи Lottie'); return; }
       try {
-        var payload = {
-          v:1,
-          lot: lastLottieJSON,
-          bg:  bgDataUrl || null,
-          opts: { loop: !!(loopChk && loopChk.checked), wide: !!wide, fullH: !!fullH }
-        };
+        var payload = { v:1, lot: lastLottieJSON, bg:  bgDataUrl || null,
+          opts: { loop: !!(loopChk && loopChk.checked), wide: !!wide, fullH: !!fullH } };
         var resp = await fetch('/api/share', {
-          method:'POST',
-          headers:{ 'content-type':'application/json' },
-          body: JSON.stringify(payload)
+          method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify(payload)
         });
         if (!resp.ok) throw new Error('share failed');
         var data = await resp.json();
         var link = location.origin + location.pathname + '?id=' + encodeURIComponent(data.id);
-        try { await navigator.clipboard.writeText(link); } catch(_){}
-        alert('Ссылка скопирована:\n' + link);
+
+        // Тихое копирование (без модальных диалогов)
+        try {
+          await navigator.clipboard.writeText(link);
+          showToast('Ссылка скопирована');
+        } catch(_) {
+          // фолбэк без алерта
+          var ta = document.createElement('textarea');
+          ta.value = link; document.body.appendChild(ta);
+          ta.style.position='fixed'; ta.style.left='-9999px';
+          ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+          showToast('Ссылка скопирована');
+        }
       } catch(err) {
         console.error(err);
-        alert('Не удалось создать шаринг.');
+        showToast('Не удалось создать ссылку');
       }
     });
   }
 
-  /* [ANCHOR:LOAD_FROM_LINK] — загрузка по короткой ссылке */
+  /* [ANCHOR:LOAD_FROM_LINK] — загрузка по короткой ссылке (Netlify Blobs) */
   (async function loadIfLinked(){
     var id = new URLSearchParams(location.search).get('id');
     if (!id) return;
@@ -250,16 +239,28 @@ document.addEventListener('DOMContentLoaded', function () {
       var snap = await resp.json();
 
       if (snap.opts){ wide = !!snap.opts.wide; fullH = !!snap.opts.fullH; if (loopChk) loopChk.checked = !!snap.opts.loop; }
-      applyScale();
-
       if (snap.bg) { bgDataUrl = snap.bg; bgEl.style.backgroundImage = 'url(' + bgDataUrl + ')'; }
       if (snap.lot){ lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
     } catch(e){
       console.error(e);
-      alert('Не удалось загрузить данные по ссылке.');
+      showToast('Не удалось загрузить данные');
     }
   })();
 
-  /* [ANCHOR:CLEANUP] */
-  window.addEventListener('unload', function(){ /* no-op */ });
+  /* [ANCHOR:ON_MOBILE_INIT] — сразу «разворачиваемся» на телефоне */
+  if (MOBILE) {
+    // обновляем кастомный vh, чтобы 100dvh вела себя одинаково
+    function updateVh(){ 
+      var h = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+      document.documentElement.style.setProperty('--vh', (h * 0.01) + 'px');
+    }
+    updateVh();
+    window.visualViewport && window.visualViewport.addEventListener('resize', updateVh);
+    window.addEventListener('resize', updateVh);
+
+    // небольшой «пинок», чтобы скрыть часть UI браузера
+    setTimeout(function(){ window.scrollTo(0, 1); }, 200);
+    setTimeout(function(){ window.scrollTo(0, 0); }, 600);
+  }
+
 });
