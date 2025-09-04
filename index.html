@@ -56,8 +56,16 @@
     /* [ANCHOR:MOBILE_VISIBILITY] показать/спрятать элементы */
     .mobile-only  { display: none; }
     .desktop-only { display: inline-flex; }
+
+    /* JS-режим: если тело помечено .is-mobile */
     body.is-mobile .mobile-only  { display: inline-flex; }
     body.is-mobile .desktop-only { display: none; }
+
+    /* CSS-фолбэк: телефоны/планшеты с "coarse" pointer и узким вьюпортом */
+    @media (pointer: coarse) and (max-width: 960px) {
+      .mobile-only  { display: inline-flex; }
+      .desktop-only { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -83,7 +91,7 @@
       <button class="btn desktop-only" id="restartBtn" title="Повторить анимацию">Повтор</button>
       <label class="chk desktop-only" title="Играть зацикленно"><input type="checkbox" id="loopChk"> Зацикленно</label>
 
-      <!-- [ANCHOR:CTL_SHARE] — если пользуешься Netlify Blobs -->
+      <!-- если пользуешься Netlify Blobs -->
       <button class="btn desktop-only" id="shareBtn" title="Сохранить и получить короткую ссылку">Поделиться</button>
 
       <!-- [ANCHOR:CTL_MOBILE] единственная кнопка на телефоне -->
@@ -91,7 +99,7 @@
     </div>
   </div>
 
-  <!-- [ANCHOR:APP_SCRIPT] -->
-  <script src="app.js"></script>
+  <!-- [ANCHOR:APP_SCRIPT] анти-кэш по версии -->
+  <script src="app.js?v=8"></script>
 </body>
 </html>
