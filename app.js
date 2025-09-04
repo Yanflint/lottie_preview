@@ -36,6 +36,9 @@ document.addEventListener('DOMContentLoaded', function () {
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); }
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
 
   /* [ANCHOR:MOBILE_DETECT] расширенный детектор */
   function isMobile() {
@@ -75,15 +78,18 @@ document.addEventListener('DOMContentLoaded', function () {
   function applyScale(){
     var baseW = wide ? 1000 : 360;
     var baseH = 800;
-    var SAFE_BOTTOM = 8;
+
+    // если в Fullscreen — никакого «безопасного» отступа
+    var SAFE_BOTTOM = isFullscreen() ? 0 : 8;
 
     var winH    = window.innerHeight || baseH;
     var targetH = fullH ? Math.max(1, winH - SAFE_BOTTOM) : baseH;
     var targetW = fullH ? Math.round(baseW * (targetH / baseH)) : baseW;
 
-    if (fullH) { document.body.classList.add('fs'); if (appRoot) appRoot.classList.add('fs'); }
-    else       { document.body.classList.remove('fs'); if (appRoot) appRoot.classList.remove('fs'); }
+    if (fullH || isFullscreen()) { document.body.classList.add('fs'); if (appRoot) appRoot.classList.add('fs'); }
+    else                         { document.body.classList.remove('fs'); if (appRoot) appRoot.classList.remove('fs'); }
 
+    // Если в настоящем fullscreen — размеры берёт CSS (:fullscreen). Оставим JS-установку для пред/пост перехода.
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
@@ -97,10 +103,10 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!MOBILE) {
     sizeBtn && sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
     heightBtn && heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
-    window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
-  } else {
-    window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
   }
+  window.addEventListener('resize', function(){ if (fullH || isFullscreen()) applyScale(); });
+  document.addEventListener('fullscreenchange', applyScale);
+  document.addEventListener('webkitfullscreenchange', applyScale);
   applyScale();
 
   /* [ANCHOR:BG_UPLOAD] */
@@ -178,21 +184,28 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:FULLSCREEN_API] мобильная кнопка «Развернуть» */
+  /* [ANCHOR:FULLSCREEN_API] мобильная «Развернуть» — как у кино */
   async function enterFullscreen() {
-    var el = document.documentElement;
     try {
-      if (el.requestFullscreen)       await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // iOS Safari
+      // Просим fullscreen на самом wrapper (лучше для Safari)
+      if (wrapper.requestFullscreen) {
+        await wrapper.requestFullscreen({ navigationUI: 'hide' }).catch(()=>{});
+      } else if (wrapper.webkitRequestFullscreen) {
+        wrapper.webkitRequestFullscreen(); // iOS Safari
+      } else if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(()=>{});
+      }
     } catch(_) { /* ignore */ }
 
+    // На всякий — включаем наш «экранный» режим
     fullH = true;
     applyScale();
 
-    // попытка скрыть адресную строку
+    // Спрятать адресную строку/жестовую панель по возможности
     setTimeout(function(){ window.scrollTo(0, 1); }, 300);
-    setTimeout(function(){ window.scrollTo(0, 0); }, 600);
+    setTimeout(function(){ window.scrollTo(0, 0); }, 800);
 
+    // Повернуть в портрет (если доступно)
     if (screen.orientation && screen.orientation.lock) {
       try { await screen.orientation.lock('portrait'); } catch(_) {}
     }
