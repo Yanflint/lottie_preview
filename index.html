@@ -27,7 +27,12 @@
 
     /* [ANCHOR:LAYERS] */
     .bg, .lottie-layer { position:absolute; inset:0; }
-    .bg { background-size: auto 100%; background-position: center; background-repeat:no-repeat; background-color:#000; }
+    .bg {
+      background-size: auto 100%;           /* десктоп: по высоте */
+      background-position: center;
+      background-repeat:no-repeat;
+      background-color:#000;
+    }
     .lottie-layer { display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .lottie-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     .lottie-layer svg, .lottie-layer canvas {
@@ -36,29 +41,28 @@
       left:auto !important; right:auto !important;
     }
 
-    /* [ANCHOR:MODE_PANEL] — панель кнопок для десктопа */
+    /* [ANCHOR:MODE_PANEL] — панель кнопок (только десктоп) */
     .mode { display:flex; flex-wrap:wrap; gap:8px; font-size:12px; align-items:center; justify-content:center; }
     .mode input[type="file"] { display:none; }
-
-    /* [ANCHOR:BUTTON_STYLES] */
     .btn, .chk { height:var(--ctl-h); padding:0 10px; display:inline-flex; align-items:center; gap:6px; background:#2a2a2a; color:#e8e8e8; border:none; border-radius:6px; font-size:12px; line-height:1; cursor:pointer; user-select:none; }
     .btn:active { opacity:.85; }
     .chk input[type="checkbox"] { width:14px; height:14px; margin:0; }
 
-    /* [ANCHOR:MOBILE_MODE] — на телефонах скрываем всю панель, растягиваем обёртку на экран */
+    /* [ANCHOR:MOBILE_MODE] — телефон: без панели, превью на весь экран по ширине */
     body.is-mobile .mode { display: none !important; }
     body.is-mobile .app { max-width: none; padding: 0; }
     body.is-mobile { overflow: hidden; }
     body.is-mobile .wrapper {
       position: fixed; inset: 0;
-      width: 100vw; height: 100dvh; /* без прокрутки; адресная строка по возможности сжимается */
+      width: 100vw; height: 100dvh;
       background: #000;
     }
-    /* Ключ: на мобиле масштабируем «по ширине» */
-    body.is-mobile .bg { background-size: 100% auto; } /* по ширине */
+    /* Ключ: телефон — фон по ширине, Lottie по высоте превью */
+    body.is-mobile .bg { background-size: 100% auto; } /* фон по ширине */
     body.is-mobile .lottie-layer svg,
     body.is-mobile .lottie-layer canvas {
-      width:100% !important; height:auto !important; /* по ширине */
+      height:100% !important;  /* Lottie по высоте превью */
+      width:auto !important;
     }
 
     /* [ANCHOR:TOAST_CSS] — тихий тост для копирования */
@@ -69,6 +73,14 @@
       z-index: 1000; backdrop-filter: blur(4px);
     }
     .toast.show { opacity: 1; }
+
+    /* [ANCHOR:VERSION_BADGE_CSS] — бейдж версии */
+    .ver {
+      position: fixed; right: 8px; bottom: 6px; z-index: 1000;
+      font-size: 11px; line-height: 1; padding: 4px 6px; color:#bbb;
+      background: rgba(0,0,0,.4); border-radius: 6px; pointer-events:none;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -100,7 +112,10 @@
   <!-- [ANCHOR:TOAST_NODE] -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- [ANCHOR:VERSION_BADGE_NODE] -->
+  <div id="ver" class="ver"></div>
+
   <!-- [ANCHOR:APP_SCRIPT] анти-кэш -->
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>
