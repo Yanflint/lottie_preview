@@ -28,7 +28,7 @@
     /* [ANCHOR:LAYERS] */
     .bg, .lottie-layer { position:absolute; inset:0; }
     .bg {
-      background-size: auto 100%;           /* десктоп: по высоте */
+      background-size: auto 100%;       /* десктоп: фон по высоте */
       background-position: center;
       background-repeat:no-repeat;
       background-color:#000;
@@ -52,25 +52,17 @@
     body.is-mobile .mode { display: none !important; }
     body.is-mobile .app { max-width: none; padding: 0; }
     body.is-mobile { overflow: hidden; }
-    body.is-mobile .wrapper {
-      position: fixed; inset: 0;
-      width: 100vw; height: 100dvh;
-      background: #000;
-    }
-    /* Ключ: телефон — фон по ширине, Lottie по высоте превью */
+    body.is-mobile .wrapper { position: fixed; inset: 0; width: 100vw; height: 100dvh; background:#000; }
+    /* Мобайл: фон по ширине; Lottie подгоняем по полной высоте фоновой картинки (JS) */
     body.is-mobile .bg { background-size: 100% auto; } /* фон по ширине */
-    body.is-mobile .lottie-layer svg,
-    body.is-mobile .lottie-layer canvas {
-      height:100% !important;  /* Lottie по высоте превью */
-      width:auto !important;
-    }
 
-    /* [ANCHOR:TOAST_CSS] — тихий тост для копирования */
+    /* [ANCHOR:TOAST_CSS] — тост рядом с кнопкой */
     .toast {
-      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
-      padding: 10px 12px; background: rgba(0,0,0,.75); color: #fff; border-radius: 10px;
-      font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s ease-out;
+      position: fixed;
+      padding: 8px 10px; background: rgba(0,0,0,.85); color: #fff; border-radius: 8px;
+      font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s ease-out;
       z-index: 1000; backdrop-filter: blur(4px);
+      transform: translate(-50%, -6px); /* рендерится над центром кнопки */
     }
     .toast.show { opacity: 1; }
 
@@ -116,6 +108,6 @@
   <div id="ver" class="ver"></div>
 
   <!-- [ANCHOR:APP_SCRIPT] анти-кэш -->
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=31"></script>
 </body>
 </html>
