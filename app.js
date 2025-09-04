@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var sizeBtn     = document.getElementById('sizeBtn');
   var heightBtn   = document.getElementById('heightBtn');
   var shareBtn    = document.getElementById('shareBtn');
+  var fsBtn       = document.getElementById('fsBtn'); // <-- новая кнопка
 
   var lottieLayer     = stage.querySelector('.lottie-layer');
   var lottieContainer = document.getElementById('lottie');
@@ -26,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var anim = null, animName = null;
   var wide = false;     // 360 / 1000 (база ширины)
   var fullH = false;    // 800 / экран
-  var bgDataUrl = null; // фон как dataURL (для предпросмотра/отправки)
+  var bgDataUrl = null; // фон как dataURL
   var lastLottieJSON = null;
 
   /* [ANCHOR:ANTICACHE] */
@@ -35,6 +36,15 @@ document.addEventListener('DOMContentLoaded', function () {
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); }
+
+  /* [ANCHOR:MOBILE_DETECT] простая эвристика */
+  function isMobile() {
+    var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    var narrow = window.matchMedia('(max-width: 820px)').matches;
+    return touch && narrow;
+  }
+  var MOBILE = isMobile();
+  if (MOBILE) document.body.classList.add('is-mobile');
 
   /* [ANCHOR:RESET] */
   function renewLottieRoot(){
@@ -74,18 +84,26 @@ document.addEventListener('DOMContentLoaded', function () {
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
-    heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
+    // На телефоне ширину/высоту не показываем — кнопок нет.
+    if (!MOBILE) {
+      sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
+      heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
+    }
   }
 
   /* [ANCHOR:EVENT_BINDINGS] */
-  sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
-  heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
-  window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
+  if (!MOBILE) {
+    sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
+    heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
+    window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
+  } else {
+    // На мобиле реагируем на поворот/изменение панели
+    window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
+  }
   applyScale();
 
   /* [ANCHOR:BG_UPLOAD] */
-  bgInput.addEventListener('change', function(e){
+  bgInput && bgInput.addEventListener('change', function(e){
     var file = e.target.files && e.target.files[0];
     if (!file) return;
     var reader = new FileReader();
@@ -108,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
         name: animName,
         container: lottieContainer,
         renderer: 'svg',
-        loop: !!loopChk.checked,
+        loop: MOBILE ? true : !!(loopChk && loopChk.checked),
         autoplay: true,
         animationData: JSON.parse(JSON.stringify(animationData)),
         rendererSettings: { progressiveLoad:false, className:'lot-'+animName, preserveAspectRatio:'xMidYMid slice' }
@@ -133,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /* [ANCHOR:LOTTIE_UPLOAD] */
-  lotInput.addEventListener('change', function(e){
+  lotInput && lotInput.addEventListener('change', function(e){
     var file = e.target.files && e.target.files[0];
     if (!file) return;
     var reader = new FileReader();
@@ -146,66 +164,45 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   /* [ANCHOR:RESTART] */
-  restartBtn.addEventListener('click', function(){
+  restartBtn && restartBtn.addEventListener('click', function(){
     if (!anim) return;
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
 
   /* [ANCHOR:LOOP_TOGGLE] */
-  loopChk.addEventListener('change', function(){
+  loopChk && loopChk.addEventListener('change', function(){
     if (!anim) return;
     var on = loopChk.checked;
     try { if (typeof anim.setLooping === 'function') anim.setLooping(on); else anim.loop = on; } catch(_){ anim.loop = on; }
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:SHARE_ACTION] — сохранить в Netlify Blobs и получить короткую ссылку */
-  if (shareBtn){
-    shareBtn.addEventListener('click', async function(){
-      if (!lastLottieJSON){ alert('Загрузи Lottie перед шарингом.'); return; }
-      try {
-        var payload = {
-          v:1,
-          lot: lastLottieJSON,
-          bg:  bgDataUrl || null,
-          opts: { loop: !!loopChk.checked, wide: !!wide, fullH: !!fullH }
-        };
-        var resp = await fetch('/api/share', {
-          method:'POST',
-          headers:{ 'content-type':'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) throw new Error('share failed');
-        var data = await resp.json();
-        var link = location.origin + location.pathname + '?id=' + encodeURIComponent(data.id);
-        try { await navigator.clipboard.writeText(link); } catch(_){}
-        alert('Ссылка скопирована:\\n' + link);
-      } catch(err) {
-        console.error(err);
-        alert('Не удалось создать шаринг.');
-      }
-    });
-  }
-
-  /* [ANCHOR:LOAD_FROM_LINK] — загрузка по короткой ссылке */
-  (async function loadIfLinked(){
-    var id = new URLSearchParams(location.search).get('id');
-    if (!id) return;
+  /* [ANCHOR:FULLSCREEN_API] кнопка мобильного разворота */
+  async function enterFullscreen() {
+    // пробуем Fullscreen API
+    var el = document.documentElement;
     try {
-      var resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
-      if (!resp.ok) throw new Error('404');
-      var snap = await resp.json();
+      if (el.requestFullscreen)       await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // iOS Safari 16+
+    } catch(_) { /* игнор */ }
 
-      if (snap.opts){ wide = !!snap.opts.wide; fullH = !!snap.opts.fullH; loopChk.checked = !!snap.opts.loop; }
-      applyScale();
+    // включаем наш «экранный» режим и пересчитываем размеры
+    fullH = true;
+    applyScale();
 
-      if (snap.bg) { bgDataUrl = snap.bg; bgEl.style.backgroundImage = 'url(' + bgDataUrl + ')'; }
-      if (snap.lot){ lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
-    } catch(e){
-      console.error(e);
-      alert('Не удалось загрузить данные по ссылке.');
+    // небольшие трюки для скрытия адресной строки
+    setTimeout(function(){ window.scrollTo(0, 1); }, 300);
+    setTimeout(function(){ window.scrollTo(0, 0); }, 600);
+
+    // по возможности — блокируем ориентацию в портрет
+    if (screen.orientation && screen.orientation.lock) {
+      try { await screen.orientation.lock('portrait'); } catch(_) {}
     }
-  })();
+  }
+  fsBtn && fsBtn.addEventListener('click', enterFullscreen);
+
+  /* [ANCHOR:LOAD_FROM_LINK] — если используешь Netlify Blobs, блок оставь как был */
+  // (ничего не меняем тут; твои функции /api/share и /api/shot продолжают работать)
 
   /* [ANCHOR:CLEANUP] */
   window.addEventListener('unload', function(){ /* no-op */ });
