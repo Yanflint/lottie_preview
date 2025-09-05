@@ -1,54 +1,54 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v31-fit-bg-fullheight';
+const VERSION = 'v34-preview-by-width_lottie-by-preview-height';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
 
-  /* [ANCHOR:INIT_DOM] */
-  var wrapper     = document.getElementById('wrapper');
-  var stage       = document.getElementById('stage');
-  var bgEl        = document.getElementById('bg');
-  var toastEl     = document.getElementById('toast');
-  var verEl       = document.getElementById('ver');
+  /* [ANCHOR:DOM_QUERY] */
+  var wrapper   = document.getElementById('wrapper');
+  var preview   = document.getElementById('preview');
+  var bgImg     = document.getElementById('bgImg');
+  var toastEl   = document.getElementById('toast');
+  var verEl     = document.getElementById('ver');
 
-  var bgInput     = document.getElementById('bgInput');
-  var lotInput    = document.getElementById('lotInput');
-  var restartBtn  = document.getElementById('restartBtn');
-  var loopChk     = document.getElementById('loopChk');
-  var sizeBtn     = document.getElementById('sizeBtn');
-  var heightBtn   = document.getElementById('heightBtn');
-  var shareBtn    = document.getElementById('shareBtn');
+  var bgInput   = document.getElementById('bgInput');
+  var lotInput  = document.getElementById('lotInput');
+  var restartBtn= document.getElementById('restartBtn');
+  var loopChk   = document.getElementById('loopChk');
+  var sizeBtn   = document.getElementById('sizeBtn');
+  var heightBtn = document.getElementById('heightBtn');
+  var shareBtn  = document.getElementById('shareBtn');
 
-  var lottieLayer     = stage.querySelector('.lottie-layer');
+  var lottieLayer     = preview.querySelector('.lottie-layer');
   var lottieContainer = document.getElementById('lottie');
 
   /* [ANCHOR:STATE] */
   var anim = null, animName = null;
   var wide = false;     // 360 / 1000 (десктоп)
   var fullH = false;    // 800 / экран (десктоп)
-  var bgDataUrl = null; // фон как dataURL
   var lastLottieJSON = null;
+  var bgNatW = 0, bgNatH = 0; // натуральные размеры фона
 
-  // Натуральные размеры фона (для точного вычисления масштабирования по ширине)
-  var bgNatW = 0, bgNatH = 0;
+  // Базовое соотношение 360×800 для фолбэка, если фона нет
+  var FALLBACK_AR_H_OVER_W = 800 / 360;
 
-  /* [ANCHOR:VERSION_SET] */
+  /* [ANCHOR:VERSION_BADGE_SET] */
   if (verEl) verEl.textContent = VERSION;
 
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
-  function afterTwoFrames(cb){ requestAnimationFrame(function(){ requestAnimationFrame(cb); }); }
+  function afterTwoFrames(cb){ requestAnimationFrame(()=>requestAnimationFrame(cb)); }
 
-  /* [ANCHOR:TOAST_API] — тост рядом с кнопкой */
+  /* [ANCHOR:TOAST_API] — тост над кнопкой */
   function showToastNear(el, msg){
     if (!toastEl) return;
     toastEl.textContent = msg;
     const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
     if (r) {
       toastEl.style.left = (r.left + r.width/2) + 'px';
-      toastEl.style.top  = (r.top) + 'px';
+      toastEl.style.top  = (r.top) + 'px'; // top кнопки; CSS поднимет тост выше через translate(-100%)
     } else {
       toastEl.style.left = '50%';
       toastEl.style.top  = (window.innerHeight - 24) + 'px';
@@ -59,46 +59,22 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /* [ANCHOR:MOBILE_DETECT] */
-  function isMobile() {
+  function isMobile(){
     var ua = navigator.userAgent || '';
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    var smallScreen = Math.min(screen.width, screen.height) <= 820 || window.innerWidth <= 920;
-    var uaMobile = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
-    return (coarse || touch || uaMobile) && smallScreen;
+    var touch  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    var small  = Math.min(screen.width, screen.height) <= 820 || window.innerWidth <= 920;
+    var uaMob  = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
+    return (coarse || touch || uaMob) && small;
   }
   var MOBILE = isMobile();
   if (MOBILE) document.body.classList.add('is-mobile');
 
   /* [ANCHOR:ANTICACHE] */
-  try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(e){}
+  try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(_){}
 
-  /* [ANCHOR:RESET] */
-  function renewLottieRoot(){
-    try { if (anim && animName && typeof lottie.destroy === 'function') lottie.destroy(animName); } catch(_){}
-    try { if (anim && anim.destroy) anim.destroy(); } catch(_){}
-    anim = null; animName = null;
-
-    if (lottieLayer && lottieLayer.parentNode) lottieLayer.parentNode.removeChild(lottieLayer);
-    lottieLayer = document.createElement('div');
-    lottieLayer.className = 'lottie-layer';
-    lottieLayer.style.inset = '0';
-    var newId = uid('lottie_');
-    var newContainer = document.createElement('div');
-    newContainer.id = newId; newContainer.className = 'lottie-container';
-    newContainer.style.width='100%'; newContainer.style.height='100%';
-    lottieLayer.appendChild(newContainer);
-    stage.appendChild(lottieLayer);
-    lottieContainer = newContainer;
-  }
-  function disposeAll(){
-    try { if (lottie.destroy) lottie.destroy(); } catch(_){}
-    renewLottieRoot();
-    while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
-  }
-
-  /* [ANCHOR:APPLY_SCALE] — десктоп (мобайл управляет CSS/JS ниже) */
-  function applyScale(){
+  /* [ANCHOR:DESKTOP_SCALE] — старые режимы ширины/высоты (десктоп) */
+  function applyDesktopScale(){
     if (MOBILE) return;
     var baseW = wide ? 1000 : 360;
     var baseH = 800;
@@ -111,79 +87,93 @@ document.addEventListener('DOMContentLoaded', function () {
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
+    // preview повторяет wrapper на десктопе
+    preview.style.left = '0'; preview.style.right = '0';
+    preview.style.width  = '100%';
+    preview.style.height = '100%';
+    preview.style.top    = '0';
+
     if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
     if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
   }
 
   if (!MOBILE) {
-    sizeBtn && sizeBtn.addEventListener('click',  function(){ wide  = !wide;  applyScale(); });
-    heightBtn && heightBtn.addEventListener('click',function(){ fullH = !fullH; applyScale(); });
-    window.addEventListener('resize',  function(){ if (fullH) applyScale(); });
+    sizeBtn && sizeBtn.addEventListener('click',  ()=>{ wide=!wide; applyDesktopScale(); });
+    heightBtn && heightBtn.addEventListener('click',()=>{ fullH=!fullH; applyDesktopScale(); });
+    window.addEventListener('resize', ()=>{ if (fullH) applyDesktopScale(); });
   }
-  applyScale();
+  applyDesktopScale();
 
-  /* [ANCHOR:MOBILE_BG_META] — читаем натуральные размеры загруженного фона */
-  function loadBgMeta(dataUrl){
-    return new Promise(function(resolve){
-      var img = new Image();
+  /* [ANCHOR:LOAD_BG_META] */
+  function loadBgMeta(src){
+    return new Promise(resolve=>{
+      const img = new Image();
       img.onload = function(){
-        bgNatW = img.naturalWidth || img.width || 0;
-        bgNatH = img.naturalHeight || img.height || 0;
+        bgNatW = img.naturalWidth || img.width  || 0;
+        bgNatH = img.naturalHeight|| img.height || 0;
         resolve();
       };
-      img.src = dataUrl;
+      img.src = src;
     });
   }
 
-  /* [ANCHOR:MOBILE_LAYOUT] — Lottie = полная высота фоновой картинки (масштаб по ширине) */
-  function updateMobileFitToBg(){
+  /* [ANCHOR:MOBILE_LAYOUT] — ключевая логика
+     1) wrapper = экран;
+     2) preview шириной = ширина экрана; высота = width * (bgNatH/bgNatW) (или фолбэк 800/360);
+     3) preview вертикально центрируется в wrapper;
+     4) Lottie заполняет preview по ВЫСОТЕ, ширина авто (центр по X). */
+  function updateMobileLayout(){
     if (!MOBILE) return;
 
-    var cw = wrapper.clientWidth;
-    var ch = wrapper.clientHeight;
+    const cw = wrapper.clientWidth;     // ширина экрана
+    const ch = wrapper.clientHeight;    // высота экрана
 
-    // фон задан как background-size: 100% auto → ширина = cw, высота = cw * (bgNatH/bgNatW)
-    var h;
-    if (bgNatW > 0 && bgNatH > 0) {
-      var scale = cw / bgNatW;
-      h = bgNatH * scale;             // ПОЛНАЯ высота фонового изображения в текущем масштабе
-    } else {
-      h = ch;                          // нет фона — используем высоту контейнера
-    }
+    const ar = (bgNatW>0 && bgNatH>0) ? (bgNatH/bgNatW) : FALLBACK_AR_H_OVER_W;
+    const ph = Math.round(cw * ar);     // высота контейнера превью, по фону
+    const top = Math.round((ch - ph)/2);
 
-    var top = (ch - h) / 2;            // центрируем, даже если выйдет за края
+    // размеры и позиция preview
+    preview.style.width  = '100vw';
+    preview.style.height = ph + 'px';
+    preview.style.left   = '0';
+    preview.style.right  = '0';
+    preview.style.top    = top + 'px';
 
-    // геометрия слоя Lottie
-    lottieLayer.style.left   = '0';
-    lottieLayer.style.right  = '0';
-    lottieLayer.style.width  = '100%';
-    lottieLayer.style.top    = top + 'px';
-    lottieLayer.style.height = h + 'px';
-    lottieLayer.style.bottom = 'auto';
+    // фон-IMG уже масштабируется CSS-ом: на мобиле width:100%; height:auto;
+    // Lottie-слой заполнит preview (inset:0 в CSS). SVG/canvas — height:100%.
   }
 
   /* [ANCHOR:BG_UPLOAD] */
   bgInput && bgInput.addEventListener('change', function(e){
-    var file = e.target.files && e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
-    var reader = new FileReader();
+    const reader = new FileReader();
     reader.onload = async function(){
-      bgDataUrl = String(reader.result);
-      bgEl.style.backgroundImage = 'url(' + bgDataUrl + ')';
-      await loadBgMeta(bgDataUrl);
-      updateMobileFitToBg();
+      const src = String(reader.result);
+      bgImg.src = src;
+      await loadBgMeta(src);
+      updateMobileLayout();
       try { e.target.value=''; } catch(_){}
     };
     reader.readAsDataURL(file);
   });
 
   /* [ANCHOR:LOTTIE_LOAD] */
+  function renewLottieRoot(){
+    try { if (anim && animName && typeof lottie.destroy === 'function') lottie.destroy(animName); } catch(_){}
+    try { if (anim && anim.destroy) anim.destroy(); } catch(_){}
+    anim = null; animName = null;
+
+    // очистка контейнера
+    while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
+  }
+
   function loadLottieFromData(animationData){
-    disposeAll();
+    renewLottieRoot();
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    var preserve = MOBILE ? 'xMidYMid meet' : 'xMidYMid slice';
+    const preserve = 'xMidYMid meet'; // чтобы вписываться по высоте без обрезки по ширине
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
@@ -197,30 +187,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
       anim.addEventListener('DOMLoaded', function(){
         try {
-          var svg = lottieContainer.querySelector('svg');
-          var canvas = lottieContainer.querySelector('canvas');
+          const svg = lottieContainer.querySelector('svg');
+          const canvas = lottieContainer.querySelector('canvas');
 
           if (svg) {
             svg.removeAttribute('width'); svg.removeAttribute('height');
-            svg.style.position='static'; svg.style.margin='0 auto';
             svg.style.height='100%'; svg.style.width='auto';
+            svg.style.position='static'; svg.style.margin='0 auto';
+            svg.setAttribute('preserveAspectRatio','xMidYMid meet');
           }
           if (canvas) {
-            canvas.style.position='static'; canvas.style.margin='0 auto';
             canvas.style.height='100%'; canvas.style.width='auto';
+            canvas.style.position='static'; canvas.style.margin='0 auto';
           }
-          // после вставки — подгон по фону
-          updateMobileFitToBg();
         } catch(_){}
+        // после вставки — обновим геометрию превью для мобайла
+        updateMobileLayout();
       });
     });
   }
 
   /* [ANCHOR:LOTTIE_UPLOAD] */
   lotInput && lotInput.addEventListener('change', function(e){
-    var file = e.target.files && e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
-    var reader = new FileReader();
+    const reader = new FileReader();
     reader.onload = function(){
       try { loadLottieFromData(JSON.parse(String(reader.result))); }
       catch(err){ alert('Не удалось прочитать JSON Lottie.'); }
@@ -242,35 +233,33 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!anim) return;
       try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
     });
-    window.addEventListener('resize', updateMobileFitToBg);
-    setTimeout(updateMobileFitToBg, 100);
+    window.addEventListener('resize', updateMobileLayout);
+    setTimeout(updateMobileLayout, 100);
   }
 
   /* [ANCHOR:LOOP_TOGGLE] */
   loopChk && loopChk.addEventListener('change', function(){
     if (!anim) return;
-    var on = loopChk.checked;
+    const on = loopChk.checked;
     try { if (typeof anim.setLooping === 'function') anim.setLooping(on); else anim.loop = on; } catch(_){ anim.loop = on; }
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:SHARE_ACTION] — короткая ссылка с «тостом» у кнопки */
+  /* [ANCHOR:SHARE] — короткая ссылка с тостом НАД кнопкой */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToastNear(shareBtn, 'Загрузи Lottie'); return; }
       try {
-        var payload = { v:1, lot: lastLottieJSON, bg:  bgDataUrl || null,
-          opts: { loop: !!(loopChk && loopChk.checked), wide: !!wide, fullH: !!fullH } };
-        var resp = await fetch('/api/share', {
-          method:'POST', headers:{ 'content-type':'application/json' }, body: JSON.stringify(payload)
-        });
+        const payload = { v:1, lot:lastLottieJSON, bg: bgImg.src || null,
+          opts:{ loop:!!(loopChk && loopChk.checked), wide:!!wide, fullH:!!fullH } };
+        const resp = await fetch('/api/share', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload) });
         if (!resp.ok) throw new Error('share failed');
-        var data = await resp.json();
-        var link = location.origin + location.pathname + '?id=' + encodeURIComponent(data.id);
+        const data = await resp.json();
+        const link = location.origin + location.pathname + '?id=' + encodeURIComponent(data.id);
 
         try { await navigator.clipboard.writeText(link); }
-        catch(_) {
-          var ta = document.createElement('textarea');
+        catch(_){
+          const ta = document.createElement('textarea');
           ta.value = link; document.body.appendChild(ta);
           ta.style.position='fixed'; ta.style.left='-9999px';
           ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
@@ -283,28 +272,27 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* [ANCHOR:LOAD_FROM_LINK] — инициализация из короткой ссылки (Netlify Blobs) */
+  /* [ANCHOR:LOAD_FROM_LINK] — если открыли короткую ссылку */
   (async function loadIfLinked(){
-    var id = new URLSearchParams(location.search).get('id');
-    if (!id) { updateMobileFitToBg(); return; }
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) { updateMobileLayout(); return; }
     try {
-      var resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
+      const resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
       if (!resp.ok) throw new Error('404');
-      var snap = await resp.json();
-
-      if (snap.opts){ wide = !!snap.opts.wide; fullH = !!snap.opts.fullH; if (loopChk) loopChk.checked = !!snap.opts.loop; }
+      const snap = await resp.json();
 
       if (snap.bg) {
-        bgDataUrl = snap.bg;
-        bgEl.style.backgroundImage = 'url(' + bgDataUrl + ')';
-        await loadBgMeta(bgDataUrl);
+        bgImg.src = snap.bg;
+        await loadBgMeta(snap.bg);
       }
-      if (snap.lot){ lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
-
-      updateMobileFitToBg();
+      if (snap.lot) {
+        lastLottieJSON = snap.lot; loadLottieFromData(snap.lot);
+      } else {
+        updateMobileLayout();
+      }
     } catch(e){
       console.error(e);
-      updateMobileFitToBg();
+      updateMobileLayout();
     }
   })();
 });
