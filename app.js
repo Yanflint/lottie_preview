@@ -1,7 +1,7 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v44-fitHeight_everywhere_mobileScaleByWidth';
+const VERSION = 'v45-fitHeight_everywhere_mobileScaleByWidth_loopPersist';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
@@ -30,6 +30,9 @@ document.addEventListener('DOMContentLoaded', function () {
   var fullH = false;    // 800 / экран (десктоп)
   var lastLottieJSON = null;
   var MOBILE = isMobile();
+
+  // Сохраняем режим «Зацикленно» в отдельном стейте и используем его везде
+  var loopOn = false;
 
   /* [ANCHOR:VERSION_BADGE_SET] */
   if (verEl) verEl.textContent = VERSION;
@@ -147,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
         name: animName,
         container: lottieContainer,
         renderer: 'svg',
-        loop: !!(loopChk && loopChk.checked),
+        loop: loopOn,                 // ← используем стейт цикла
         autoplay: true,
         animationData: JSON.parse(JSON.stringify(animationData)),
         rendererSettings: { progressiveLoad:false, className:'lot-'+animName, preserveAspectRatio: preserve }
@@ -193,12 +196,15 @@ document.addEventListener('DOMContentLoaded', function () {
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
 
-  /* [ANCHOR:LOOP_TOGGLE] */
+  /* [ANCHOR:LOOP_TOGGLE] — чекбокс управляет стейтом + текущей анимацией */
   loopChk && loopChk.addEventListener('change', function(){
-    if (!anim) return;
-    const on = loopChk.checked;
-    try { if (typeof anim.setLooping === 'function') anim.setLooping(on); else anim.loop = on; } catch(_){ anim.loop = on; }
-    if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
+    loopOn = !!loopChk.checked;
+    if (anim) {
+      try {
+        if (typeof anim.setLooping === 'function') anim.setLooping(loopOn);
+        else anim.loop = loopOn;
+      } catch(_){ anim.loop = loopOn; }
+    }
   });
 
   /* [ANCHOR:TOAST_API] — тост НАД кнопкой */
@@ -208,7 +214,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
     if (r) {
       toastEl.style.left = (r.left + r.width/2) + 'px';
-      toastEl.style.top  = (r.top) + 'px'; // подъём выше — через CSS translate
+      toastEl.style.top  = (r.top) + 'px'; // поднимем выше через CSS translate
     } else {
       toastEl.style.left = '50%';
       toastEl.style.top  = (window.innerHeight - 24) + 'px';
@@ -218,13 +224,17 @@ document.addEventListener('DOMContentLoaded', function () {
     showToastNear._t = setTimeout(()=> toastEl.classList.remove('show'), 1400);
   }
 
-  /* [ANCHOR:SHARE] — короткая ссылка с тостом НАД кнопкой */
+  /* [ANCHOR:SHARE] — короткая ссылка. Сохраняем loopOn в opts.loop */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToastNear(shareBtn, 'Загрузи Lottie'); return; }
       try {
-        const payload = { v:1, lot:lastLottieJSON, bg: bgImg.src || null,
-          opts:{ loop:!!(loopChk && loopChk.checked), wide:!!wide, fullH:!!fullH } };
+        const payload = {
+          v: 1,
+          lot: lastLottieJSON,
+          bg:  bgImg.src || null,
+          opts: { loop: loopOn, wide: !!wide, fullH: !!fullH } // ← loop сохраняем
+        };
         const resp = await fetch('/api/share', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload) });
         if (!resp.ok) throw new Error('share failed');
         const data = await resp.json();
@@ -245,7 +255,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* [ANCHOR:LOAD_FROM_LINK] — если открыли короткую ссылку */
+  /* [ANCHOR:LOAD_FROM_LINK] — восстанавливаем стейт, включая loopOn, до загрузки Lottie */
   (async function loadIfLinked(){
     const id = new URLSearchParams(location.search).get('id');
     if (!id) { if (MOBILE) updateMobilePreviewScale(); return; }
@@ -253,6 +263,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
       if (!resp.ok) throw new Error('404');
       const snap = await resp.json();
+
+      // Применяем сохранённый режим цикла ДО создания анимации
+      if (snap.opts && typeof snap.opts.loop === 'boolean') {
+        loopOn = !!snap.opts.loop;
+        if (loopChk) loopChk.checked = loopOn; // синхронизируем UI на десктопе
+      }
 
       if (snap.bg)  bgImg.src = snap.bg;
       if (snap.lot) { lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
