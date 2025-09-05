@@ -11,7 +11,7 @@
 
   <style>
     /* [ANCHOR:CSS_VARS] */
-    :root { --h: 800px; --ctl-h: 30px; --vh: 1vh; }
+    :root { --ctl-h: 30px; }
 
     /* [ANCHOR:CSS_BASE] */
     * { box-sizing: border-box; }
@@ -21,19 +21,22 @@
     /* [ANCHOR:APP_WRAP] */
     .app { max-width: 1000px; margin: 0 auto; padding: 16px; display:flex; flex-direction:column; align-items:center; gap:12px; }
 
-    /* [ANCHOR:WRAPPER] — общий контейнер; на мобиле = экран, на десктопе — фикс. размеры */
-    .wrapper { position: relative; width: 360px; height: var(--h); overflow: hidden; background:#000; border:none; }
+    /* [ANCHOR:WRAPPER] — внешний контейнер */
+    .wrapper { position: relative; width: 360px; height: 800px; overflow: hidden; background:#000; border:none; }
 
-    /* [ANCHOR:PREVIEW] — внутренний «контейнер превью»
-       На десктопе заполняет wrapper 1:1;
-       На мобиле: width=100vw, height=вычисляется по соотношению фона, вертикально центрируется в wrapper. */
-    .preview { position:absolute; left:0; right:0; top:0; width:100%; height:100%; margin:0 auto; overflow:hidden; }
+    /* [ANCHOR:PREVIEW_BASE] — внутренняя «коробочка превью» (логический размер 360×800) */
+    .preview {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+    }
 
     /* [ANCHOR:LAYERS] */
     .bg, .lottie-layer { position:absolute; inset:0; }
-    .bg { overflow:hidden; }
-    /* Фон — IMG, чтобы масштаб совпадал с Lottie пиксель-в-пиксель */
-    .bg img { display:block; height:100%; width:auto; margin:0 auto; } /* десктоп: по высоте */
+    .bg { overflow:hidden; display:flex; align-items:center; justify-content:center; }
+    /* фон изображением, чтобы совпадать с геометрией Lottie */
+    .bg img { display:block; height:100%; width:auto; margin:0 auto; }
     .lottie-layer { display:flex; align-items:center; justify-content:center; }
     .lottie-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     .lottie-layer svg, .lottie-layer canvas {
@@ -49,14 +52,21 @@
     .btn:active { opacity:.85; }
     .chk input[type="checkbox"] { width:14px; height:14px; margin:0; }
 
-    /* [ANCHOR:MOBILE] — телефон: wrapper = экран; preview вычисляется JS и центрируется по вертикали */
+    /* [ANCHOR:MOBILE_MODE] — на телефоне: wrapper = весь экран; preview = 360×800, масштабируем трансформацией */
     body.is-mobile .app { max-width:none; padding:0; }
     body.is-mobile .mode { display:none !important; }
     body.is-mobile { overflow:hidden; }
     body.is-mobile .wrapper { position:fixed; inset:0; width:100vw; height:100dvh; background:#000; }
-    body.is-mobile .bg img { width:100%; height:auto; } /* мобайл: фон по ширине внутри preview */
+    /* сам preview в моб. режиме имеет базовый размер 360×800 и масштабируется JS-ом */
+    body.is-mobile .preview {
+      width: 360px;           /* [ANCHOR:PREVIEW_BASE_SIZE] */
+      height: 800px;
+      left: 50%; top: 50%;
+      transform-origin: 50% 50%; /* центр, чтобы удобно центрировать */
+      /* transform задаётся из JS */
+    }
 
-    /* [ANCHOR:TOAST_CSS] — тост теперь строго НАД кнопкой */
+    /* [ANCHOR:TOAST_CSS] — тост строго НАД кнопкой */
     .toast {
       position: fixed;
       padding: 8px 10px; background: rgba(0,0,0,.85); color:#fff; border-radius:8px;
@@ -78,7 +88,7 @@
   <div class="app"><!-- [ANCHOR:APP_ROOT] -->
     <div id="wrapper" class="wrapper" aria-label="Область превью"><!-- [ANCHOR:WRAPPER_NODE] -->
 
-      <!-- [ANCHOR:PREVIEW_NODE] -->
+      <!-- [ANCHOR:PREVIEW_NODE] — коробочка 360×800 (или 1000×800 на десктопе) -->
       <div id="preview" class="preview">
         <div class="bg"><img id="bgImg" alt=""></div><!-- [ANCHOR:BG_IMG] -->
         <div class="lottie-layer"><div id="lottie" class="lottie-container"></div></div><!-- [ANCHOR:LOTTIE_LAYER] -->
@@ -110,6 +120,6 @@
   <div id="ver" class="ver"></div>
 
   <!-- [ANCHOR:SCRIPT_INCLUDE] -->
-  <script src="app.js?v=34"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>
