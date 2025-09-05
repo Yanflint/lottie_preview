@@ -1,112 +1,110 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v49-always-fit-to-bg-height-enforced';
+const VERSION = 'v50-refactor-lottie-fit-height-via-stage';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
 
-  /* [ANCHOR:DOM_QUERY] */
-  var wrapper   = document.getElementById('wrapper');
-  var preview   = document.getElementById('preview');
-  var bgImg     = document.getElementById('bgImg');
-  var phEl      = document.getElementById('ph');
-  var toastEl   = document.getElementById('toast');
-  var verEl     = document.getElementById('ver');
+  /* ---------------- DOM ---------------- */
+  const wrapper   = document.getElementById('wrapper');
+  const preview   = document.getElementById('preview');
+  const bgImg     = document.getElementById('bgImg');
+  const phEl      = document.getElementById('ph');
+  const toastEl   = document.getElementById('toast');
+  const verEl     = document.getElementById('ver');
 
-  var bgInput   = document.getElementById('bgInput');
-  var lotInput  = document.getElementById('lotInput');
-  var restartBtn= document.getElementById('restartBtn');
-  var loopChk   = document.getElementById('loopChk');
-  var sizeBtn   = document.getElementById('sizeBtn');
-  var heightBtn = document.getElementById('heightBtn');
-  var shareBtn  = document.getElementById('shareBtn');
-  var modeEl    = document.getElementById('mode');
+  const bgInput   = document.getElementById('bgInput');
+  const lotInput  = document.getElementById('lotInput');
+  const restartBtn= document.getElementById('restartBtn');
+  const loopChk   = document.getElementById('loopChk');
+  const sizeBtn   = document.getElementById('sizeBtn');
+  const heightBtn = document.getElementById('heightBtn');
+  const shareBtn  = document.getElementById('shareBtn');
+  const modeEl    = document.getElementById('mode');
 
-  var lottieContainer = document.getElementById('lottie');
+  const lotStage  = document.getElementById('lotStage');   // сцена фиксированного номинала
+  const lottieMount = document.getElementById('lottie');    // точка монтирования Lottie
 
-  /* [ANCHOR:STATE] */
-  var anim = null, animName = null;
-  var wide = false;         // 360 / 1000 (десктоп)
-  var fullH = false;        // высота = экран (десктоп)
-  var lastLottieJSON = null;
-  var MOBILE = isMobile();
-  var loopOn = false;
-  var bgNatW = 0, bgNatH = 800;  // до загрузки — 800, показываем плейсхолдер
+  /* ---------------- STATE ---------------- */
+  let anim = null, animName = null;
+  let wide = false;         // 360 / 1000 (десктоп)
+  let fullH = false;        // высота = экран (десктоп)
+  let lastLottieJSON = null;
+  const MOBILE = isMobile();
+  let loopOn = false;
 
-  /* [ANCHOR:VERSION_BADGE_SET] */
+  // фон
+  let bgNatW = 0, bgNatH = 800; // до загрузки — 800 (для плейсхолдера)
+
+  // номинал композиции Lottie, чтобы масштабировать по ВЫСОТЕ
+  let lotNomW = 0, lotNomH = 0;
+
+  /* ---------------- INIT ---------------- */
   if (verEl) verEl.textContent = VERSION;
+  if (MOBILE) document.body.classList.add('is-mobile');
 
-  /* [ANCHOR:UTILS] */
+  try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(_){}
+
+  /* ---------------- UTILS ---------------- */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(()=>requestAnimationFrame(cb)); }
   function isMobile(){
-    var ua = navigator.userAgent || '';
-    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    var touch  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    var small  = Math.min(screen.width, screen.height) <= 820 || window.innerWidth <= 920;
-    var uaMob  = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
+    const ua = navigator.userAgent || '';
+    const coarse = matchMediaSafe('(pointer: coarse)');
+    const touch  = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const small  = Math.min(screen.width, screen.height) <= 820 || window.innerWidth <= 920;
+    const uaMob  = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
     return (coarse || touch || uaMob) && small;
   }
-  if (MOBILE) document.body.classList.add('is-mobile');
+  function matchMediaSafe(q){
+    try { return window.matchMedia && window.matchMedia(q).matches; } catch(_){ return false; }
+  }
 
-  // базовые размеры «коробочки» превью
   function basePreviewHeight(){ return Math.max(1, bgNatH || 800); }
   function basePreviewWidth(){ return wide ? 1000 : 360; }
 
-  /* [ANCHOR:ANTICACHE] */
-  try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(_){}
-
-  /* ========= КЛЮЧ: принудительная подгонка Lottie по ВЫСОТЕ ========= */
-  function enforceLottieFitByHeight(){
-    try{
-      var svg = lottieContainer.querySelector('svg');
-      var canvas = lottieContainer.querySelector('canvas');
-      if (svg){
-        svg.removeAttribute('width'); svg.removeAttribute('height');
-        svg.style.setProperty('height','100%','important');
-        svg.style.setProperty('width','auto','important');
-        svg.style.position='static'; svg.style.margin='0 auto';
-        svg.setAttribute('preserveAspectRatio','xMidYMid meet'); // масштаб от высоты
-      }
-      if (canvas){
-        canvas.style.setProperty('height','100%','important');
-        canvas.style.setProperty('width','auto','important');
-        canvas.style.position='static'; canvas.style.margin='0 auto';
-      }
-    }catch(_){}
-  }
-
-  /* ===================== Д Е С К Т О П ===================== */
-
-  function getAppChromeHeight(){
-    var app = document.querySelector('.app');
-    if (!app) return 0;
-    var cs = getComputedStyle(app);
-    var padTop = parseFloat(cs.paddingTop) || 0;
-    var padBot = parseFloat(cs.paddingBottom) || 0;
-    var gap    = parseFloat(cs.rowGap || cs.gap) || 0;
+  function appChromeH(){
+    const app = document.querySelector('.app'); if (!app) return 0;
+    const cs = getComputedStyle(app);
+    const padTop = parseFloat(cs.paddingTop) || 0;
+    const padBot = parseFloat(cs.paddingBottom) || 0;
+    const gap    = parseFloat(cs.rowGap || cs.gap) || 0;
     return Math.ceil(padTop + padBot + gap);
   }
-  function getControlsHeight(){
+  function controlsH(){
     if (!modeEl) return 0;
-    var r = modeEl.getBoundingClientRect();
+    const r = modeEl.getBoundingClientRect();
     return Math.ceil(r.height);
   }
 
+  /* ---------------- LAYOUT CORE ---------------- */
+
+  // Масштабирует сцену Lottie (lotStage) по ВЫСОТЕ превью
+  function resizeLottieStage(){
+    if (!lotNomW || !lotNomH) return; // нет анимации
+    const ph = preview.clientHeight;  // высота "коробочки" превью (НЕ визуальный scale)
+    const scale = ph / lotNomH;
+
+    // сцене задаём "номинальные" размеры и центрируем
+    lotStage.style.width  = lotNomW + 'px';
+    lotStage.style.height = lotNomH + 'px';
+    lotStage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  }
+
+  // Десктоп: применяем размеры wrapper/preview и обновляем подписи
   function applyDesktopScale(){
     if (MOBILE) return;
+    const baseW = basePreviewWidth();
+    const baseH = basePreviewHeight();
 
-    var baseW = basePreviewWidth();
-    var baseH = basePreviewHeight();
+    const SAFE = 8, GAP = 8;
+    const winH = window.innerHeight || baseH;
 
-    var SAFE  = 8, GAP = 8;
-    var winH  = window.innerHeight || baseH;
-
-    var targetH, targetW;
-    if (fullH) {
-      var hCtrls  = getControlsHeight();
-      var hChrome = getAppChromeHeight();
+    let targetH, targetW;
+    if (fullH){
+      const hCtrls  = controlsH();
+      const hChrome = appChromeH();
       targetH = Math.max(80, winH - (SAFE*2 + hCtrls + hChrome + GAP));
       targetW = Math.round(baseW * (targetH / baseH));
     } else {
@@ -124,37 +122,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
     if (heightBtn) heightBtn.textContent = 'Высота: ' + targetH + 'px';
-
-    // КРИТИЧНО: после любого пересчёта размеров принудительно фиксируем Lottie по высоте
-    enforceLottieFitByHeight();
   }
 
-  if (!MOBILE) {
-    sizeBtn && sizeBtn.addEventListener('click', ()=>{ wide=!wide; applyDesktopScale(); });
-    heightBtn && heightBtn.addEventListener('click',()=>{ fullH=!fullH; applyDesktopScale(); });
-    window.addEventListener('resize', ()=>{ if (fullH) applyDesktopScale(); else enforceLottieFitByHeight(); });
-  }
-
-  /* ===================== М О Б И Л Ь Н Ы Й ===================== */
-
-  function updateMobilePreviewScale(){
+  // Мобилка: коробочка 360×(высота фона). Масштаб по ширине экрана
+  function applyMobileScale(){
     if (!MOBILE) return;
     const vw = (window.visualViewport && window.visualViewport.width)  ? window.visualViewport.width  : window.innerWidth;
     const s  = vw / 360;
-
     preview.style.width  = '360px';
     preview.style.height = basePreviewHeight() + 'px';
     preview.style.transform = `translate(-50%, -50%) scale(${s})`;
-
-    enforceLottieFitByHeight();
   }
 
-  if (MOBILE) {
-    updateMobilePreviewScale();
-    window.visualViewport && window.visualViewport.addEventListener('resize', updateMobilePreviewScale);
-    window.addEventListener('resize', updateMobilePreviewScale);
+  // Единая точка: пересчитать размеры и сцену Lottie
+  function layout(){
+    if (MOBILE) applyMobileScale(); else applyDesktopScale();
+    resizeLottieStage();
+  }
 
-    // тап по превью = повтор
+  /* ---------------- LISTENERS (desktop/mobile) ---------------- */
+  if (!MOBILE) {
+    sizeBtn && sizeBtn.addEventListener('click', ()=>{ wide=!wide; layout(); });
+    heightBtn && heightBtn.addEventListener('click',()=>{ fullH=!fullH; layout(); });
+    window.addEventListener('resize', ()=>{ if (fullH) layout(); });
+  } else {
+    window.visualViewport && window.visualViewport.addEventListener('resize', layout);
+    window.addEventListener('resize', layout);
+
+    // Тап по превью = повтор
     wrapper.addEventListener('click', function(e){
       if (e.target.closest && e.target.closest('.mode')) return;
       if (!anim) return;
@@ -162,9 +157,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* ===================== З А Г Р У З К И ===================== */
+  /* ---------------- LOADERS ---------------- */
 
-  // Фон: читаем натуральную высоту → это и есть высота превью
+  // Фон
   bgInput && bgInput.addEventListener('change', function(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -177,7 +172,7 @@ document.addEventListener('DOMContentLoaded', function () {
         bgNatH = meta.naturalHeight || meta.height || 0;
         bgImg.src = src;
         phEl && phEl.classList.add('hidden');
-        MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
+        layout();
       };
       meta.src = src;
       try { e.target.value=''; } catch(_){}
@@ -185,33 +180,39 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsDataURL(file);
   });
 
+  // Lottie
   function renewLottieRoot(){
     try { if (anim && animName && typeof lottie.destroy === 'function') lottie.destroy(animName); } catch(_){}
     try { if (anim && anim.destroy) anim.destroy(); } catch(_){}
     anim = null; animName = null;
-    while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
+
+    // полностью очищаем mount
+    while (lottieMount.firstChild) lottieMount.removeChild(lottieMount.firstChild);
   }
 
   function loadLottieFromData(animationData){
     renewLottieRoot();
+
+    // запоминаем номинал композиции (ключевое для масштабирования по высоте)
+    lotNomW = Number(animationData.w) || 0;
+    lotNomH = Number(animationData.h) || 0;
+
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    const preserve = 'xMidYMid meet'; // масштаб рассчитываем от высоты
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
-        container: lottieContainer,
+        container: lottieMount,   // ← монтируем внутрь сцены фиксированного номинала
         renderer: 'svg',
         loop: loopOn,
         autoplay: true,
         animationData: JSON.parse(JSON.stringify(animationData)),
-        rendererSettings: { progressiveLoad:false, className:'lot-'+animName, preserveAspectRatio: preserve }
+        // rendererSettings по умолчанию; размеры задаёт наш lotStage
       });
 
       anim.addEventListener('DOMLoaded', function(){
-        enforceLottieFitByHeight();                  // сразу после инициализации
-        MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
+        layout(); // как только DOM Lottie готов — сразу подгоняем сцену
       });
     });
   }
@@ -228,11 +229,13 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsText(file, 'utf-8');
   });
 
+  // Повтор
   restartBtn && restartBtn.addEventListener('click', function(){
     if (!anim) return;
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
 
+  // Цикл
   loopChk && loopChk.addEventListener('change', function(){
     loopOn = !!loopChk.checked;
     if (anim) {
@@ -241,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
+  /* ---------------- SHARE (как было) ---------------- */
   function showToastNear(el, msg){
     if (!toastEl) return;
     toastEl.textContent = msg;
@@ -274,9 +278,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  /* ---------------- LOAD FROM LINK ---------------- */
   (async function loadIfLinked(){
     const id = new URLSearchParams(location.search).get('id');
-    if (!id) { MOBILE ? updateMobilePreviewScale() : applyDesktopScale(); return; }
+    if (!id) { layout(); return; }
     try {
       const resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
       if (!resp.ok) throw new Error('404');
@@ -302,13 +307,13 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       if (snap.lot) { lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
-      else { MOBILE ? updateMobilePreviewScale() : applyDesktopScale(); }
+      else { layout(); }
     } catch(e){
       console.error(e);
-      MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
+      layout();
     }
   })();
 
   // первичный рендер
-  MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
+  layout();
 });
