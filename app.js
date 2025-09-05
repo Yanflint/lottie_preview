@@ -1,7 +1,7 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v46-desktop-fullH-controls-fit_mobile-hide-version';
+const VERSION = 'v47-height-from-image_placeholder_heightBtn-actual';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var wrapper   = document.getElementById('wrapper');
   var preview   = document.getElementById('preview');
   var bgImg     = document.getElementById('bgImg');
+  var phEl      = document.getElementById('ph');
   var toastEl   = document.getElementById('toast');
   var verEl     = document.getElementById('ver');
 
@@ -27,11 +28,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* [ANCHOR:STATE] */
   var anim = null, animName = null;
-  var wide = false;     // 360 / 1000 (десктоп)
-  var fullH = false;    // 800 / экран (десктоп)
+  var wide = false;         // 360 / 1000 (десктоп)
+  var fullH = false;        // высота = экран (десктоп)
   var lastLottieJSON = null;
   var MOBILE = isMobile();
-  var loopOn = false;   // сохраняем и применяем в share/open
+  var loopOn = false;
+
+  // натуральные размеры фонового изображения
+  var bgNatW = 0, bgNatH = 800;  // по умолчанию 800 для плейсхолдера
 
   /* [ANCHOR:VERSION_BADGE_SET] */
   if (verEl) verEl.textContent = VERSION;
@@ -39,8 +43,6 @@ document.addEventListener('DOMContentLoaded', function () {
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(()=>requestAnimationFrame(cb)); }
-
-  /* [ANCHOR:MOBILE_DETECT] */
   function isMobile(){
     var ua = navigator.userAgent || '';
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -49,83 +51,94 @@ document.addEventListener('DOMContentLoaded', function () {
     var uaMob  = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
     return (coarse || touch || uaMob) && small;
   }
+
   if (MOBILE) document.body.classList.add('is-mobile');
+
+  // актуальная «базовая» высота превью = высота загруженного фона (или 800 до загрузки)
+  function basePreviewHeight(){ return Math.max(1, bgNatH || 800); }
+  // актуальная «базовая» ширина превью (десктоп): 360 или 1000
+  function basePreviewWidth(){ return wide ? 1000 : 360; }
 
   /* [ANCHOR:ANTICACHE] */
   try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(_){}
 
-  /* =====================  Д Е С К Т О П  ===================== */
+  /* ===================== ДЕСKTOP ===================== */
 
-  // [ANCHOR:APP_CHROME] — считаем верт. «хром» контейнера: paddings и gap .app
   function getAppChromeHeight(){
     var app = document.querySelector('.app');
     if (!app) return 0;
     var cs = getComputedStyle(app);
     var padTop = parseFloat(cs.paddingTop) || 0;
     var padBot = parseFloat(cs.paddingBottom) || 0;
-    var gap    = parseFloat(cs.rowGap || cs.gap) || 0; // межэлементный gap (между превью и контролами)
+    var gap    = parseFloat(cs.rowGap || cs.gap) || 0;
     return Math.ceil(padTop + padBot + gap);
   }
-
-  // [ANCHOR:CONTROLS_H] — фактическая высота панели контролов
   function getControlsHeight(){
     if (!modeEl) return 0;
     var r = modeEl.getBoundingClientRect();
     return Math.ceil(r.height);
   }
 
-  /* [ANCHOR:DESKTOP_SCALE] — 360/1000 по ширине, 800 по высоте; при fullH оставляем место под контролы */
+  /* [ANCHOR:DESKTOP_SCALE]
+     НЕ fullH:  width = 360/1000, height = высота загруженной картинки (bgNatH).
+     fullH:     высота вычисляется из окна с вычетом контролов; ширина пропорционально скейлится.
+     Кнопки показывают актуальные пиксели (и ширину, и высоту).
+  */
   function applyDesktopScale(){
     if (MOBILE) return;
-    var baseW = wide ? 1000 : 360;
-    var baseH = 800;
 
+    var baseW = basePreviewWidth();
+    var baseH = basePreviewHeight();
+
+    var SAFE  = 8, GAP = 8;
     var winH  = window.innerHeight || baseH;
-    var SAFE  = 8;   // «высота пуск» для края окна
-    var GAP   = 8;   // небольшой запас между превью и контролами
 
-    var targetH;
+    var targetH, targetW;
+
     if (fullH) {
-      // вычитаем: верхний SAFE + нижний SAFE + высоту контролов + «хром» .app + небольшой GAP
       var hCtrls = getControlsHeight();
       var hChrome = getAppChromeHeight();
-      targetH = Math.max(320, winH - (SAFE*2 + hCtrls + hChrome + GAP));
+      targetH = Math.max(80, winH - (SAFE*2 + hCtrls + hChrome + GAP));
+      // сохраняем пропорции превью относительно «логической» коробки baseW×baseH
+      targetW = Math.round(baseW * (targetH / baseH));
     } else {
+      targetW = baseW;
       targetH = baseH;
     }
-
-    var targetW = Math.round(baseW * (targetH / baseH));
 
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    // preview повторяет wrapper
     preview.style.left = '0'; preview.style.top = '0';
     preview.style.width  = '100%';
     preview.style.height = '100%';
     preview.style.transform = 'none';
 
+    // подписи кнопок — всегда фактические пиксели
     if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
-    if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
+    if (heightBtn) heightBtn.textContent = 'Высота: ' + targetH + 'px';
   }
 
   if (!MOBILE) {
-    sizeBtn && sizeBtn.addEventListener('click',  ()=>{ wide=!wide; applyDesktopScale(); });
+    sizeBtn && sizeBtn.addEventListener('click', ()=>{ wide=!wide; applyDesktopScale(); });
     heightBtn && heightBtn.addEventListener('click',()=>{ fullH=!fullH; applyDesktopScale(); });
     window.addEventListener('resize',  ()=>{ if (fullH) applyDesktopScale(); });
   }
-  applyDesktopScale();
 
-  /* =====================  М О Б И Л Ь Н Ы Й  ===================== */
+  /* ===================== MOBILE ===================== */
 
   /* [ANCHOR:MOBILE_PREVIEW_SCALE]
-     Коробочка превью = 360×800. Масштабируем её по ШИРИНЕ экрана: s = viewportWidth / 360.
-     Центруем по экрану. Высота может выйти за пределы — это нормально.
+     Коробочка превью на мобиле имеет размер 360×(высота картинки).
+     Масштабируем по ширине экрана: s = viewportWidth / 360.
   */
   function updateMobilePreviewScale(){
     if (!MOBILE) return;
     const vw = (window.visualViewport && window.visualViewport.width)  ? window.visualViewport.width  : window.innerWidth;
     const s  = vw / 360;
+
+    // базовая высота = bgNatH (или 800 до загрузки)
+    preview.style.width  = '360px';
+    preview.style.height = basePreviewHeight() + 'px';
     preview.style.transform = `translate(-50%, -50%) scale(${s})`;
   }
 
@@ -134,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.visualViewport && window.visualViewport.addEventListener('resize', updateMobilePreviewScale);
     window.addEventListener('resize', updateMobilePreviewScale);
 
-    // Тап по превью = повтор
+    // тап по превью = повтор
     wrapper.addEventListener('click', function(e){
       if (e.target.closest && e.target.closest('.mode')) return;
       if (!anim) return;
@@ -142,16 +155,25 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* =====================  З А Г Р У З К И  ===================== */
+  /* ===================== ЗАГРУЗКИ ===================== */
 
-  /* [ANCHOR:BG_UPLOAD] */
+  // [ANCHOR:BG_UPLOAD]
   bgInput && bgInput.addEventListener('change', function(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(){
       const src = String(reader.result);
-      bgImg.src = src;
+      // считываем натуральные размеры, чтобы поставить правильную высоту превью
+      const img = new Image();
+      img.onload = function(){
+        bgNatW = img.naturalWidth  || img.width  || 0;
+        bgNatH = img.naturalHeight || img.height || 0;
+        bgImg.src = src;
+        phEl && phEl.classList.add('hidden'); // прячем плейсхолдер
+        if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
+      };
+      img.src = src;
       try { e.target.value=''; } catch(_){}
     };
     reader.readAsDataURL(file);
@@ -162,7 +184,6 @@ document.addEventListener('DOMContentLoaded', function () {
     try { if (anim && animName && typeof lottie.destroy === 'function') lottie.destroy(animName); } catch(_){}
     try { if (anim && anim.destroy) anim.destroy(); } catch(_){}
     anim = null; animName = null;
-
     while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
   }
 
@@ -188,7 +209,6 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
           const svg = lottieContainer.querySelector('svg');
           const canvas = lottieContainer.querySelector('canvas');
-
           if (svg) {
             svg.removeAttribute('width'); svg.removeAttribute('height');
             svg.style.width='100%'; svg.style.height='100%';
@@ -200,12 +220,12 @@ document.addEventListener('DOMContentLoaded', function () {
             canvas.style.position='static'; canvas.style.margin='0 auto';
           }
         } catch(_){}
-        if (MOBILE) updateMobilePreviewScale();
+        if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
       });
     });
   }
 
-  /* [ANCHOR:LOTTIE_UPLOAD] */
+  // [ANCHOR:LOTTIE_UPLOAD]
   lotInput && lotInput.addEventListener('change', function(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -218,24 +238,22 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsText(file, 'utf-8');
   });
 
-  /* [ANCHOR:RESTART_BTN] — десктоп */
+  /* [ANCHOR:RESTART_BTN] */
   restartBtn && restartBtn.addEventListener('click', function(){
     if (!anim) return;
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
 
-  /* [ANCHOR:LOOP_TOGGLE] — чекбокс управляет стейтом + текущей анимацией */
+  /* [ANCHOR:LOOP_TOGGLE] */
   loopChk && loopChk.addEventListener('change', function(){
     loopOn = !!loopChk.checked;
     if (anim) {
-      try {
-        if (typeof anim.setLooping === 'function') anim.setLooping(loopOn);
-        else anim.loop = loopOn;
-      } catch(_){ anim.loop = loopOn; }
+      try { if (typeof anim.setLooping === 'function') anim.setLooping(loopOn); else anim.loop = loopOn; }
+      catch(_){ anim.loop = loopOn; }
     }
   });
 
-  /* [ANCHOR:TOAST_API] — тост НАД кнопкой */
+  /* [ANCHOR:TOAST_API] */
   function showToastNear(el, msg){
     if (!toastEl) return;
     toastEl.textContent = msg;
@@ -252,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
     showToastNear._t = setTimeout(()=> toastEl.classList.remove('show'), 1400);
   }
 
-  /* [ANCHOR:SHARE] — короткая ссылка. Сохраняем loopOn в opts.loop */
+  /* [ANCHOR:SHARE] — сохраняем loopOn как раньше */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToastNear(shareBtn, 'Загрузи Lottie'); return; }
@@ -283,10 +301,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* [ANCHOR:LOAD_FROM_LINK] — восстанавливаем стейт, включая loopOn, до загрузки Lottie */
+  /* [ANCHOR:LOAD_FROM_LINK] — восстанавливаем loop + фон/анимацию */
   (async function loadIfLinked(){
     const id = new URLSearchParams(location.search).get('id');
-    if (!id) { if (MOBILE) updateMobilePreviewScale(); return; }
+    if (!id) { if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale(); return; }
     try {
       const resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
       if (!resp.ok) throw new Error('404');
@@ -297,12 +315,29 @@ document.addEventListener('DOMContentLoaded', function () {
         if (loopChk) loopChk.checked = loopOn;
       }
 
-      if (snap.bg)  bgImg.src = snap.bg;
+      if (snap.bg) {
+        // загрузим фон и получим его натуральные размеры
+        await new Promise(res=>{
+          const img = new Image();
+          img.onload = function(){
+            bgNatW = img.naturalWidth  || img.width  || 0;
+            bgNatH = img.naturalHeight || img.height || 0;
+            bgImg.src = snap.bg;
+            phEl && phEl.classList.add('hidden');
+            res();
+          };
+          img.src = snap.bg;
+        });
+      }
+
       if (snap.lot) { lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
-      else if (MOBILE) updateMobilePreviewScale();
+      else { if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale(); }
     } catch(e){
       console.error(e);
-      if (MOBILE) updateMobilePreviewScale();
+      if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
     }
   })();
+
+  // первичный рендер
+  if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
 });
