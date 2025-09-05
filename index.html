@@ -11,29 +11,30 @@
 
   <style>
     /* [ANCHOR:CSS_VARS] */
-    :root { --h: 800px; --ctl-h: 30px; --safe-bottom: 8px; --vh: 1vh; }
+    :root { --h: 800px; --ctl-h: 30px; --vh: 1vh; }
 
     /* [ANCHOR:CSS_BASE] */
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { margin: 0; background: #0f0f10; color: #e8e8e8; font-family: -apple-system, Segoe UI, Roboto, Inter, Arial; }
+    body { margin: 0; background:#0f0f10; color:#e8e8e8; font-family: -apple-system, Segoe UI, Roboto, Inter, Arial; }
 
     /* [ANCHOR:APP_WRAP] */
-    .app { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .app { max-width: 1000px; margin: 0 auto; padding: 16px; display:flex; flex-direction:column; align-items:center; gap:12px; }
 
-    /* [ANCHOR:LAYOUT_WRAPPER] */
-    .wrapper { width: 360px; height: var(--h); position: relative; overflow: hidden; background:#000; border:none; }
-    .stage   { width:100%; height:100%; position:relative; background:#000; }
+    /* [ANCHOR:WRAPPER] — общий контейнер; на мобиле = экран, на десктопе — фикс. размеры */
+    .wrapper { position: relative; width: 360px; height: var(--h); overflow: hidden; background:#000; border:none; }
+
+    /* [ANCHOR:PREVIEW] — внутренний «контейнер превью»
+       На десктопе заполняет wrapper 1:1;
+       На мобиле: width=100vw, height=вычисляется по соотношению фона, вертикально центрируется в wrapper. */
+    .preview { position:absolute; left:0; right:0; top:0; width:100%; height:100%; margin:0 auto; overflow:hidden; }
 
     /* [ANCHOR:LAYERS] */
     .bg, .lottie-layer { position:absolute; inset:0; }
-    .bg {
-      background-size: auto 100%;       /* десктоп: фон по высоте */
-      background-position: center;
-      background-repeat:no-repeat;
-      background-color:#000;
-    }
-    .lottie-layer { display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .bg { overflow:hidden; }
+    /* Фон — IMG, чтобы масштаб совпадал с Lottie пиксель-в-пиксель */
+    .bg img { display:block; height:100%; width:auto; margin:0 auto; } /* десктоп: по высоте */
+    .lottie-layer { display:flex; align-items:center; justify-content:center; }
     .lottie-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     .lottie-layer svg, .lottie-layer canvas {
       height:100% !important; width:auto !important; max-width:none !important;
@@ -48,43 +49,44 @@
     .btn:active { opacity:.85; }
     .chk input[type="checkbox"] { width:14px; height:14px; margin:0; }
 
-    /* [ANCHOR:MOBILE_MODE] — телефон: без панели, превью на весь экран по ширине */
-    body.is-mobile .mode { display: none !important; }
-    body.is-mobile .app { max-width: none; padding: 0; }
-    body.is-mobile { overflow: hidden; }
-    body.is-mobile .wrapper { position: fixed; inset: 0; width: 100vw; height: 100dvh; background:#000; }
-    /* Мобайл: фон по ширине; Lottie подгоняем по полной высоте фоновой картинки (JS) */
-    body.is-mobile .bg { background-size: 100% auto; } /* фон по ширине */
+    /* [ANCHOR:MOBILE] — телефон: wrapper = экран; preview вычисляется JS и центрируется по вертикали */
+    body.is-mobile .app { max-width:none; padding:0; }
+    body.is-mobile .mode { display:none !important; }
+    body.is-mobile { overflow:hidden; }
+    body.is-mobile .wrapper { position:fixed; inset:0; width:100vw; height:100dvh; background:#000; }
+    body.is-mobile .bg img { width:100%; height:auto; } /* мобайл: фон по ширине внутри preview */
 
-    /* [ANCHOR:TOAST_CSS] — тост рядом с кнопкой */
+    /* [ANCHOR:TOAST_CSS] — тост теперь строго НАД кнопкой */
     .toast {
       position: fixed;
-      padding: 8px 10px; background: rgba(0,0,0,.85); color: #fff; border-radius: 8px;
-      font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s ease-out;
-      z-index: 1000; backdrop-filter: blur(4px);
-      transform: translate(-50%, -6px); /* рендерится над центром кнопки */
+      padding: 8px 10px; background: rgba(0,0,0,.85); color:#fff; border-radius:8px;
+      font-size:12px; opacity:0; pointer-events:none; transition:opacity .15s ease-out;
+      z-index:1000; backdrop-filter: blur(4px);
+      transform: translate(-50%, calc(-100% - 8px)); /* на 8px выше верхнего края кнопки */
     }
-    .toast.show { opacity: 1; }
+    .toast.show { opacity:1; }
 
-    /* [ANCHOR:VERSION_BADGE_CSS] — бейдж версии */
+    /* [ANCHOR:VERSION_BADGE] */
     .ver {
       position: fixed; right: 8px; bottom: 6px; z-index: 1000;
       font-size: 11px; line-height: 1; padding: 4px 6px; color:#bbb;
-      background: rgba(0,0,0,.4); border-radius: 6px; pointer-events:none;
-      user-select: none;
+      background: rgba(0,0,0,.4); border-radius:6px; pointer-events:none; user-select:none;
     }
   </style>
 </head>
 <body>
   <div class="app"><!-- [ANCHOR:APP_ROOT] -->
-    <div id="wrapper" class="wrapper" aria-label="Превью Lottie" role="application"><!-- [ANCHOR:PREVIEW_WRAPPER] -->
-      <div id="stage" class="stage"><!-- [ANCHOR:PREVIEW_STAGE] -->
-        <div id="bg" class="bg"></div><!-- [ANCHOR:BG_LAYER] -->
+    <div id="wrapper" class="wrapper" aria-label="Область превью"><!-- [ANCHOR:WRAPPER_NODE] -->
+
+      <!-- [ANCHOR:PREVIEW_NODE] -->
+      <div id="preview" class="preview">
+        <div class="bg"><img id="bgImg" alt=""></div><!-- [ANCHOR:BG_IMG] -->
         <div class="lottie-layer"><div id="lottie" class="lottie-container"></div></div><!-- [ANCHOR:LOTTIE_LAYER] -->
       </div>
+
     </div>
 
-    <!-- [ANCHOR:CONTROL_PANEL] — только на десктопе -->
+    <!-- [ANCHOR:CONTROL_PANEL] — только десктоп -->
     <div class="mode" id="mode">
       <label class="btn" for="bgInput">Фон</label>
       <input id="bgInput" type="file" accept="image/*">
@@ -104,10 +106,10 @@
   <!-- [ANCHOR:TOAST_NODE] -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- [ANCHOR:VERSION_BADGE_NODE] -->
+  <!-- [ANCHOR:VERSION_NODE] -->
   <div id="ver" class="ver"></div>
 
-  <!-- [ANCHOR:APP_SCRIPT] анти-кэш -->
-  <script src="app.js?v=31"></script>
+  <!-- [ANCHOR:SCRIPT_INCLUDE] -->
+  <script src="app.js?v=34"></script>
 </body>
 </html>
