@@ -1,7 +1,7 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v45-fitHeight_everywhere_mobileScaleByWidth_loopPersist';
+const VERSION = 'v46-desktop-fullH-controls-fit_mobile-hide-version';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var sizeBtn   = document.getElementById('sizeBtn');
   var heightBtn = document.getElementById('heightBtn');
   var shareBtn  = document.getElementById('shareBtn');
+  var modeEl    = document.getElementById('mode');
 
   var lottieLayer     = preview.querySelector('.lottie-layer');
   var lottieContainer = document.getElementById('lottie');
@@ -30,9 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var fullH = false;    // 800 / экран (десктоп)
   var lastLottieJSON = null;
   var MOBILE = isMobile();
-
-  // Сохраняем режим «Зацикленно» в отдельном стейте и используем его везде
-  var loopOn = false;
+  var loopOn = false;   // сохраняем и применяем в share/open
 
   /* [ANCHOR:VERSION_BADGE_SET] */
   if (verEl) verEl.textContent = VERSION;
@@ -57,21 +56,50 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* =====================  Д Е С К Т О П  ===================== */
 
-  /* [ANCHOR:DESKTOP_SCALE] — 360/1000 по ширине, 800 по высоте */
+  // [ANCHOR:APP_CHROME] — считаем верт. «хром» контейнера: paddings и gap .app
+  function getAppChromeHeight(){
+    var app = document.querySelector('.app');
+    if (!app) return 0;
+    var cs = getComputedStyle(app);
+    var padTop = parseFloat(cs.paddingTop) || 0;
+    var padBot = parseFloat(cs.paddingBottom) || 0;
+    var gap    = parseFloat(cs.rowGap || cs.gap) || 0; // межэлементный gap (между превью и контролами)
+    return Math.ceil(padTop + padBot + gap);
+  }
+
+  // [ANCHOR:CONTROLS_H] — фактическая высота панели контролов
+  function getControlsHeight(){
+    if (!modeEl) return 0;
+    var r = modeEl.getBoundingClientRect();
+    return Math.ceil(r.height);
+  }
+
+  /* [ANCHOR:DESKTOP_SCALE] — 360/1000 по ширине, 800 по высоте; при fullH оставляем место под контролы */
   function applyDesktopScale(){
     if (MOBILE) return;
     var baseW = wide ? 1000 : 360;
     var baseH = 800;
-    var SAFE_BOTTOM = 8;
 
-    var winH    = window.innerHeight || baseH;
-    var targetH = fullH ? Math.max(1, winH - SAFE_BOTTOM) : baseH;
-    var targetW = fullH ? Math.round(baseW * (targetH / baseH)) : baseW;
+    var winH  = window.innerHeight || baseH;
+    var SAFE  = 8;   // «высота пуск» для края окна
+    var GAP   = 8;   // небольшой запас между превью и контролами
+
+    var targetH;
+    if (fullH) {
+      // вычитаем: верхний SAFE + нижний SAFE + высоту контролов + «хром» .app + небольшой GAP
+      var hCtrls = getControlsHeight();
+      var hChrome = getAppChromeHeight();
+      targetH = Math.max(320, winH - (SAFE*2 + hCtrls + hChrome + GAP));
+    } else {
+      targetH = baseH;
+    }
+
+    var targetW = Math.round(baseW * (targetH / baseH));
 
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    // preview повторяет wrapper на десктопе
+    // preview повторяет wrapper
     preview.style.left = '0'; preview.style.top = '0';
     preview.style.width  = '100%';
     preview.style.height = '100%';
@@ -84,7 +112,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!MOBILE) {
     sizeBtn && sizeBtn.addEventListener('click',  ()=>{ wide=!wide; applyDesktopScale(); });
     heightBtn && heightBtn.addEventListener('click',()=>{ fullH=!fullH; applyDesktopScale(); });
-    window.addEventListener('resize', ()=>{ if (fullH) applyDesktopScale(); });
+    window.addEventListener('resize',  ()=>{ if (fullH) applyDesktopScale(); });
   }
   applyDesktopScale();
 
@@ -92,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* [ANCHOR:MOBILE_PREVIEW_SCALE]
      Коробочка превью = 360×800. Масштабируем её по ШИРИНЕ экрана: s = viewportWidth / 360.
-     Центруем по экрану. Высота может выйти за пределы — это нормально, wrapper обрежет без влияния на содержимое.
+     Центруем по экрану. Высота может выйти за пределы — это нормально.
   */
   function updateMobilePreviewScale(){
     if (!MOBILE) return;
@@ -143,14 +171,14 @@ document.addEventListener('DOMContentLoaded', function () {
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    // ВАЖНО: slice => масштаб по высоте контейнера, кроп по ширине, центрирование
+    // «по высоте контейнера», кроп по ширине, центр
     const preserve = 'xMidYMid slice';
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
         container: lottieContainer,
         renderer: 'svg',
-        loop: loopOn,                 // ← используем стейт цикла
+        loop: loopOn,
         autoplay: true,
         animationData: JSON.parse(JSON.stringify(animationData)),
         rendererSettings: { progressiveLoad:false, className:'lot-'+animName, preserveAspectRatio: preserve }
@@ -214,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
     if (r) {
       toastEl.style.left = (r.left + r.width/2) + 'px';
-      toastEl.style.top  = (r.top) + 'px'; // поднимем выше через CSS translate
+      toastEl.style.top  = (r.top) + 'px';
     } else {
       toastEl.style.left = '50%';
       toastEl.style.top  = (window.innerHeight - 24) + 'px';
@@ -233,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
           v: 1,
           lot: lastLottieJSON,
           bg:  bgImg.src || null,
-          opts: { loop: loopOn, wide: !!wide, fullH: !!fullH } // ← loop сохраняем
+          opts: { loop: loopOn, wide: !!wide, fullH: !!fullH }
         };
         const resp = await fetch('/api/share', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload) });
         if (!resp.ok) throw new Error('share failed');
@@ -264,10 +292,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!resp.ok) throw new Error('404');
       const snap = await resp.json();
 
-      // Применяем сохранённый режим цикла ДО создания анимации
       if (snap.opts && typeof snap.opts.loop === 'boolean') {
         loopOn = !!snap.opts.loop;
-        if (loopChk) loopChk.checked = loopOn; // синхронизируем UI на десктопе
+        if (loopChk) loopChk.checked = loopOn;
       }
 
       if (snap.bg)  bgImg.src = snap.bg;
