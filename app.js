@@ -1,7 +1,7 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v34-preview-by-width_lottie-by-preview-height';
+const VERSION = 'v40-mobile-scale-box_360x800_lottie-fit-height';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
@@ -30,9 +30,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var fullH = false;    // 800 / экран (десктоп)
   var lastLottieJSON = null;
   var bgNatW = 0, bgNatH = 0; // натуральные размеры фона
-
-  // Базовое соотношение 360×800 для фолбэка, если фона нет
-  var FALLBACK_AR_H_OVER_W = 800 / 360;
+  var MOBILE = isMobile();
 
   /* [ANCHOR:VERSION_BADGE_SET] */
   if (verEl) verEl.textContent = VERSION;
@@ -40,23 +38,6 @@ document.addEventListener('DOMContentLoaded', function () {
   /* [ANCHOR:UTILS] */
   function uid(p){ return (p||'id_') + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2); }
   function afterTwoFrames(cb){ requestAnimationFrame(()=>requestAnimationFrame(cb)); }
-
-  /* [ANCHOR:TOAST_API] — тост над кнопкой */
-  function showToastNear(el, msg){
-    if (!toastEl) return;
-    toastEl.textContent = msg;
-    const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-    if (r) {
-      toastEl.style.left = (r.left + r.width/2) + 'px';
-      toastEl.style.top  = (r.top) + 'px'; // top кнопки; CSS поднимет тост выше через translate(-100%)
-    } else {
-      toastEl.style.left = '50%';
-      toastEl.style.top  = (window.innerHeight - 24) + 'px';
-    }
-    toastEl.classList.add('show');
-    clearTimeout(showToastNear._t);
-    showToastNear._t = setTimeout(()=> toastEl.classList.remove('show'), 1400);
-  }
 
   /* [ANCHOR:MOBILE_DETECT] */
   function isMobile(){
@@ -67,13 +48,14 @@ document.addEventListener('DOMContentLoaded', function () {
     var uaMob  = /iPhone|Android|Mobile|iPod|IEMobile|Windows Phone/i.test(ua);
     return (coarse || touch || uaMob) && small;
   }
-  var MOBILE = isMobile();
   if (MOBILE) document.body.classList.add('is-mobile');
 
   /* [ANCHOR:ANTICACHE] */
   try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(_){}
 
-  /* [ANCHOR:DESKTOP_SCALE] — старые режимы ширины/высоты (десктоп) */
+  /* =====================  Д Е С К Т О П  ===================== */
+
+  /* [ANCHOR:DESKTOP_SCALE] — 360/1000 по ширине, 800 по высоте */
   function applyDesktopScale(){
     if (MOBILE) return;
     var baseW = wide ? 1000 : 360;
@@ -87,11 +69,11 @@ document.addEventListener('DOMContentLoaded', function () {
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    // preview повторяет wrapper на десктопе
-    preview.style.left = '0'; preview.style.right = '0';
+    // preview повторяет wrapper на десктопе (внутри 360×800 или 1000×800 логически)
+    preview.style.left = '0'; preview.style.top = '0';
     preview.style.width  = '100%';
     preview.style.height = '100%';
-    preview.style.top    = '0';
+    preview.style.transform = 'none';
 
     if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
     if (heightBtn) heightBtn.textContent = 'Высота: ' + (fullH ? 'экран' : '800');
@@ -104,7 +86,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   applyDesktopScale();
 
-  /* [ANCHOR:LOAD_BG_META] */
+  /* =====================  М О Б И Л Ь Н Ы Й  ===================== */
+
+  /* [ANCHOR:LOAD_BG_META] — читаем натуральные размеры загрузленного фона (для инфо, но логика не зависит) */
   function loadBgMeta(src){
     return new Promise(resolve=>{
       const img = new Image();
@@ -117,31 +101,38 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* [ANCHOR:MOBILE_LAYOUT] — ключевая логика
-     1) wrapper = экран;
-     2) preview шириной = ширина экрана; высота = width * (bgNatH/bgNatW) (или фолбэк 800/360);
-     3) preview вертикально центрируется в wrapper;
-     4) Lottie заполняет preview по ВЫСОТЕ, ширина авто (центр по X). */
-  function updateMobileLayout(){
+  /* [ANCHOR:MOBILE_PREVIEW_SCALE]
+     Коробочка превью = 360×800. Масштабируем её так, чтобы целиком поместилась на экране без скролла:
+     s = min(viewportWidth/360, viewportHeight/800).
+     Центруем по экрану. Внутренности (фон IMG высотой 100%, Lottie высотой 100%) сохраняют исходную логику.
+  */
+  function updateMobilePreviewScale(){
     if (!MOBILE) return;
+    const vw = (window.visualViewport && window.visualViewport.width)  ? window.visualViewport.width  : window.innerWidth;
+    const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
 
-    const cw = wrapper.clientWidth;     // ширина экрана
-    const ch = wrapper.clientHeight;    // высота экрана
+    const sW = vw / 360;
+    const sH = vh / 800;
+    const s  = Math.min(sW, sH); // чтобы не было скролла и вся коробка поместилась
 
-    const ar = (bgNatW>0 && bgNatH>0) ? (bgNatH/bgNatW) : FALLBACK_AR_H_OVER_W;
-    const ph = Math.round(cw * ar);     // высота контейнера превью, по фону
-    const top = Math.round((ch - ph)/2);
-
-    // размеры и позиция preview
-    preview.style.width  = '100vw';
-    preview.style.height = ph + 'px';
-    preview.style.left   = '0';
-    preview.style.right  = '0';
-    preview.style.top    = top + 'px';
-
-    // фон-IMG уже масштабируется CSS-ом: на мобиле width:100%; height:auto;
-    // Lottie-слой заполнит preview (inset:0 в CSS). SVG/canvas — height:100%.
+    // центрируем
+    preview.style.transform = `translate(-50%, -50%) scale(${s})`;
   }
+
+  if (MOBILE) {
+    updateMobilePreviewScale();
+    window.visualViewport && window.visualViewport.addEventListener('resize', updateMobilePreviewScale);
+    window.addEventListener('resize', updateMobilePreviewScale);
+
+    // Тап по превью = повтор
+    wrapper.addEventListener('click', function(e){
+      if (e.target.closest && e.target.closest('.mode')) return; // на всякий случай
+      if (!anim) return;
+      try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
+    });
+  }
+
+  /* =====================  З А Г Р У З К И  ===================== */
 
   /* [ANCHOR:BG_UPLOAD] */
   bgInput && bgInput.addEventListener('change', function(e){
@@ -152,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const src = String(reader.result);
       bgImg.src = src;
       await loadBgMeta(src);
-      updateMobileLayout();
+      updateMobilePreviewScale(); // масштаб на мобиле не зависит от фона, но пусть обновится
       try { e.target.value=''; } catch(_){}
     };
     reader.readAsDataURL(file);
@@ -164,7 +155,6 @@ document.addEventListener('DOMContentLoaded', function () {
     try { if (anim && anim.destroy) anim.destroy(); } catch(_){}
     anim = null; animName = null;
 
-    // очистка контейнера
     while (lottieContainer.firstChild) lottieContainer.removeChild(lottieContainer.firstChild);
   }
 
@@ -173,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    const preserve = 'xMidYMid meet'; // чтобы вписываться по высоте без обрезки по ширине
+    const preserve = 'xMidYMid meet'; // вписаться по высоте контейнера превью
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
@@ -201,8 +191,7 @@ document.addEventListener('DOMContentLoaded', function () {
             canvas.style.position='static'; canvas.style.margin='0 auto';
           }
         } catch(_){}
-        // после вставки — обновим геометрию превью для мобайла
-        updateMobileLayout();
+        updateMobilePreviewScale();
       });
     });
   }
@@ -220,22 +209,11 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsText(file, 'utf-8');
   });
 
-  /* [ANCHOR:RESTART] — кнопка (десктоп) */
+  /* [ANCHOR:RESTART_BTN] — десктоп */
   restartBtn && restartBtn.addEventListener('click', function(){
     if (!anim) return;
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
-
-  /* [ANCHOR:MOBILE_TAP_RESTART] — тап по превью = повтор (мобайл) */
-  if (MOBILE) {
-    wrapper.addEventListener('click', function(e){
-      if (e.target.closest && e.target.closest('.mode')) return;
-      if (!anim) return;
-      try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
-    });
-    window.addEventListener('resize', updateMobileLayout);
-    setTimeout(updateMobileLayout, 100);
-  }
 
   /* [ANCHOR:LOOP_TOGGLE] */
   loopChk && loopChk.addEventListener('change', function(){
@@ -246,6 +224,22 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   /* [ANCHOR:SHARE] — короткая ссылка с тостом НАД кнопкой */
+  function showToastNear(el, msg){
+    if (!toastEl) return;
+    toastEl.textContent = msg;
+    const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+    if (r) {
+      toastEl.style.left = (r.left + r.width/2) + 'px';
+      toastEl.style.top  = (r.top) + 'px'; // сам подъём — через CSS translate(-100% - 8px)
+    } else {
+      toastEl.style.left = '50%';
+      toastEl.style.top  = (window.innerHeight - 24) + 'px';
+    }
+    toastEl.classList.add('show');
+    clearTimeout(showToastNear._t);
+    showToastNear._t = setTimeout(()=> toastEl.classList.remove('show'), 1400);
+  }
+
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToastNear(shareBtn, 'Загрузи Lottie'); return; }
@@ -275,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
   /* [ANCHOR:LOAD_FROM_LINK] — если открыли короткую ссылку */
   (async function loadIfLinked(){
     const id = new URLSearchParams(location.search).get('id');
-    if (!id) { updateMobileLayout(); return; }
+    if (!id) { if (MOBILE) updateMobilePreviewScale(); return; }
     try {
       const resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
       if (!resp.ok) throw new Error('404');
@@ -287,12 +281,12 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       if (snap.lot) {
         lastLottieJSON = snap.lot; loadLottieFromData(snap.lot);
-      } else {
-        updateMobileLayout();
+      } else if (MOBILE) {
+        updateMobilePreviewScale();
       }
     } catch(e){
       console.error(e);
-      updateMobileLayout();
+      if (MOBILE) updateMobilePreviewScale();
     }
   })();
 });
