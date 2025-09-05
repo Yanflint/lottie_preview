@@ -26,25 +26,20 @@
 
     /* [ANCHOR:PREVIEW] — «коробочка» превью */
     .preview {
-      position: absolute;
-      left: 0; top: 0;
+      position: absolute; left: 0; top: 0;
       width: 100%; height: 100%;
-      overflow: hidden;               /* важное: обрезаем края по ширине */
+      overflow: hidden;
     }
 
     /* [ANCHOR:LAYERS] */
     .bg, .lottie-layer { position:absolute; inset:0; }
     .bg { overflow:hidden; display:flex; align-items:center; justify-content:center; }
-    /* фон картинкой, чтобы пиксельно совпадать с Lottie; ВСЕГДА по высоте превью */
-    .bg img { display:block; height:100%; width:auto; margin:0 auto; }
-
+    .bg img { display:block; height:100%; width:auto; margin:0 auto; } /* фон по высоте контейнера */
     .lottie-layer { display:flex; align-items:center; justify-content:center; }
     .lottie-container { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
-    /* ВАЖНО: SVG/CANVAS занимают весь контейнер превью; «xMidYMid slice» сделает фит по высоте и кроп по ширине */
     .lottie-layer svg, .lottie-layer canvas {
       width:100% !important; height:100% !important; max-width:none !important;
       display:block !important; position:static !important; margin:0 auto !important;
-      left:auto !important; right:auto !important;
     }
 
     /* [ANCHOR:MODE_PANEL] — панель кнопок (только десктоп) */
@@ -54,16 +49,15 @@
     .btn:active { opacity:.85; }
     .chk input[type="checkbox"] { width:14px; height:14px; margin:0; }
 
-    /* [ANCHOR:MOBILE] — на телефоне: wrapper = экран; preview = 360×800, масштаб по ШИРИНЕ экрана */
+    /* [ANCHOR:MOBILE_MODE] — на телефоне: wrapper = экран; preview = 360×800, масштаб по ШИРИНЕ экрана */
     body.is-mobile .app { max-width:none; padding:0; }
     body.is-mobile .mode { display:none !important; }
     body.is-mobile { overflow:hidden; }
     body.is-mobile .wrapper { position:fixed; inset:0; width:100vw; height:100dvh; background:#000; }
     body.is-mobile .preview {
-      width: 360px; height: 800px;            /* логический размер коробочки */
-      left: 50%; top: 50%;
+      width: 360px; height: 800px; left: 50%; top: 50%;
       transform-origin: 50% 50%;
-      /* transform ставится из JS: translate(-50%,-50%) scale(viewportWidth/360) */
+      /* transform задаётся из JS */
     }
 
     /* [ANCHOR:TOAST_CSS] — тост строго НАД кнопкой */
@@ -72,7 +66,7 @@
       padding: 8px 10px; background: rgba(0,0,0,.85); color:#fff; border-radius:8px;
       font-size:12px; opacity:0; pointer-events:none; transition:opacity .15s ease-out;
       z-index:1000; backdrop-filter: blur(4px);
-      transform: translate(-50%, calc(-100% - 8px)); /* на 8px выше верхнего края кнопки */
+      transform: translate(-50%, calc(-100% - 8px));
     }
     .toast.show { opacity:1; }
 
@@ -82,18 +76,17 @@
       font-size: 11px; line-height: 1; padding: 4px 6px; color:#bbb;
       background: rgba(0,0,0,.4); border-radius:6px; pointer-events:none; user-select:none;
     }
+    /* [ANCHOR:VERSION_BADGE_MOBILE_HIDE] — скрыть версию на мобиле */
+    body.is-mobile .ver { display:none !important; }
   </style>
 </head>
 <body>
   <div class="app"><!-- [ANCHOR:APP_ROOT] -->
     <div id="wrapper" class="wrapper" aria-label="Область превью"><!-- [ANCHOR:WRAPPER_NODE] -->
-
-      <!-- [ANCHOR:PREVIEW_NODE] — коробочка 360×800 (или 1000×800 на десктопе) -->
-      <div id="preview" class="preview">
+      <div id="preview" class="preview"><!-- [ANCHOR:PREVIEW_NODE] -->
         <div class="bg"><img id="bgImg" alt=""></div><!-- [ANCHOR:BG_IMG] -->
         <div class="lottie-layer"><div id="lottie" class="lottie-container"></div></div><!-- [ANCHOR:LOTTIE_LAYER] -->
       </div>
-
     </div>
 
     <!-- [ANCHOR:CONTROL_PANEL] — только десктоп -->
@@ -102,13 +95,10 @@
       <input id="bgInput" type="file" accept="image/*">
       <label class="btn" for="lotInput">Lottie</label>
       <input id="lotInput" type="file" accept="application/json,.json">
-
       <button class="btn" id="sizeBtn">Ширина: 360px</button>
       <button class="btn" id="heightBtn">Высота: 800</button>
-
       <button class="btn" id="restartBtn" title="Повторить анимацию">Повтор</button>
       <label class="chk" title="Играть зацикленно"><input type="checkbox" id="loopChk"> Зацикленно</label>
-
       <button class="btn" id="shareBtn" title="Сохранить и получить короткую ссылку">Поделиться</button>
     </div>
   </div>
@@ -120,6 +110,6 @@
   <div id="ver" class="ver"></div>
 
   <!-- [ANCHOR:SCRIPT_INCLUDE] -->
-  <script src="app.js?v=44"></script>
+  <script src="app.js?v=46"></script>
 </body>
 </html>
