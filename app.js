@@ -1,7 +1,7 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v48-fit-by-height-always_placeholder_heightBtn-actual';
+const VERSION = 'v49-always-fit-to-bg-height-enforced';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var shareBtn  = document.getElementById('shareBtn');
   var modeEl    = document.getElementById('mode');
 
-  var lottieLayer     = preview.querySelector('.lottie-layer');
   var lottieContainer = document.getElementById('lottie');
 
   /* [ANCHOR:STATE] */
@@ -33,8 +32,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var lastLottieJSON = null;
   var MOBILE = isMobile();
   var loopOn = false;
-
-  // натуральные размеры фонового изображения
   var bgNatW = 0, bgNatH = 800;  // до загрузки — 800, показываем плейсхолдер
 
   /* [ANCHOR:VERSION_BADGE_SET] */
@@ -60,6 +57,26 @@ document.addEventListener('DOMContentLoaded', function () {
   /* [ANCHOR:ANTICACHE] */
   try { if (typeof lottie.setCacheEnabled === 'function') lottie.setCacheEnabled(false); } catch(_){}
 
+  /* ========= КЛЮЧ: принудительная подгонка Lottie по ВЫСОТЕ ========= */
+  function enforceLottieFitByHeight(){
+    try{
+      var svg = lottieContainer.querySelector('svg');
+      var canvas = lottieContainer.querySelector('canvas');
+      if (svg){
+        svg.removeAttribute('width'); svg.removeAttribute('height');
+        svg.style.setProperty('height','100%','important');
+        svg.style.setProperty('width','auto','important');
+        svg.style.position='static'; svg.style.margin='0 auto';
+        svg.setAttribute('preserveAspectRatio','xMidYMid meet'); // масштаб от высоты
+      }
+      if (canvas){
+        canvas.style.setProperty('height','100%','important');
+        canvas.style.setProperty('width','auto','important');
+        canvas.style.position='static'; canvas.style.margin='0 auto';
+      }
+    }catch(_){}
+  }
+
   /* ===================== Д Е С К Т О П ===================== */
 
   function getAppChromeHeight(){
@@ -77,11 +94,6 @@ document.addEventListener('DOMContentLoaded', function () {
     return Math.ceil(r.height);
   }
 
-  /* [ANCHOR:DESKTOP_SCALE]
-     НЕ fullH:  width = 360/1000, height = высота загруженной картинки.
-     fullH:     высота из окна с вычетом контролов; ширина масштабируется пропорционально.
-     Кнопки показывают актуальные пиксели.
-  */
   function applyDesktopScale(){
     if (MOBILE) return;
 
@@ -92,7 +104,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var winH  = window.innerHeight || baseH;
 
     var targetH, targetW;
-
     if (fullH) {
       var hCtrls  = getControlsHeight();
       var hChrome = getAppChromeHeight();
@@ -113,19 +124,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (sizeBtn)   sizeBtn.textContent   = 'Ширина: ' + targetW + 'px';
     if (heightBtn) heightBtn.textContent = 'Высота: ' + targetH + 'px';
+
+    // КРИТИЧНО: после любого пересчёта размеров принудительно фиксируем Lottie по высоте
+    enforceLottieFitByHeight();
   }
 
   if (!MOBILE) {
     sizeBtn && sizeBtn.addEventListener('click', ()=>{ wide=!wide; applyDesktopScale(); });
     heightBtn && heightBtn.addEventListener('click',()=>{ fullH=!fullH; applyDesktopScale(); });
-    window.addEventListener('resize', ()=>{ if (fullH) applyDesktopScale(); });
+    window.addEventListener('resize', ()=>{ if (fullH) applyDesktopScale(); else enforceLottieFitByHeight(); });
   }
 
   /* ===================== М О Б И Л Ь Н Ы Й ===================== */
 
-  /* [ANCHOR:MOBILE_PREVIEW_SCALE]
-     Коробочка 360×(высота фона). Масштаб по ширине экрана: s = vw / 360.
-  */
   function updateMobilePreviewScale(){
     if (!MOBILE) return;
     const vw = (window.visualViewport && window.visualViewport.width)  ? window.visualViewport.width  : window.innerWidth;
@@ -134,6 +145,8 @@ document.addEventListener('DOMContentLoaded', function () {
     preview.style.width  = '360px';
     preview.style.height = basePreviewHeight() + 'px';
     preview.style.transform = `translate(-50%, -50%) scale(${s})`;
+
+    enforceLottieFitByHeight();
   }
 
   if (MOBILE) {
@@ -151,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* ===================== З А Г Р У З К И ===================== */
 
-  // [ANCHOR:BG_UPLOAD]
+  // Фон: читаем натуральную высоту → это и есть высота превью
   bgInput && bgInput.addEventListener('change', function(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -164,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function () {
         bgNatH = meta.naturalHeight || meta.height || 0;
         bgImg.src = src;
         phEl && phEl.classList.add('hidden');
-        if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
+        MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
       };
       meta.src = src;
       try { e.target.value=''; } catch(_){}
@@ -172,7 +185,6 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsDataURL(file);
   });
 
-  /* [ANCHOR:LOTTIE_LOAD] */
   function renewLottieRoot(){
     try { if (anim && animName && typeof lottie.destroy === 'function') lottie.destroy(animName); } catch(_){}
     try { if (anim && anim.destroy) anim.destroy(); } catch(_){}
@@ -185,8 +197,7 @@ document.addEventListener('DOMContentLoaded', function () {
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    // ВАЖНО: preserveAspectRatio = meet (высота — базовая), ширина авто; обрезка по бокам делает .lottie-layer {overflow:hidden}
-    const preserve = 'xMidYMid meet';
+    const preserve = 'xMidYMid meet'; // масштаб рассчитываем от высоты
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
@@ -199,31 +210,12 @@ document.addEventListener('DOMContentLoaded', function () {
       });
 
       anim.addEventListener('DOMLoaded', function(){
-        try {
-          const svg = lottieContainer.querySelector('svg');
-          const canvas = lottieContainer.querySelector('canvas');
-
-          if (svg) {
-            svg.removeAttribute('width'); svg.removeAttribute('height');
-            svg.style.height = '100%';
-            svg.style.width  = 'auto';
-            svg.style.position='static';
-            svg.style.margin='0 auto';
-            svg.setAttribute('preserveAspectRatio','xMidYMid meet');
-          }
-          if (canvas) {
-            canvas.style.height = '100%';
-            canvas.style.width  = 'auto';
-            canvas.style.position='static';
-            canvas.style.margin='0 auto';
-          }
-        } catch(_){}
-        if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
+        enforceLottieFitByHeight();                  // сразу после инициализации
+        MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
       });
     });
   }
 
-  // [ANCHOR:LOTTIE_UPLOAD]
   lotInput && lotInput.addEventListener('change', function(e){
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -236,13 +228,11 @@ document.addEventListener('DOMContentLoaded', function () {
     reader.readAsText(file, 'utf-8');
   });
 
-  /* [ANCHOR:RESTART_BTN] */
   restartBtn && restartBtn.addEventListener('click', function(){
     if (!anim) return;
     try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
   });
 
-  /* [ANCHOR:LOOP_TOGGLE] */
   loopChk && loopChk.addEventListener('change', function(){
     loopOn = !!loopChk.checked;
     if (anim) {
@@ -251,34 +241,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  /* [ANCHOR:TOAST_API] */
   function showToastNear(el, msg){
     if (!toastEl) return;
     toastEl.textContent = msg;
     const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-    if (r) {
-      toastEl.style.left = (r.left + r.width/2) + 'px';
-      toastEl.style.top  = (r.top) + 'px';
-    } else {
-      toastEl.style.left = '50%';
-      toastEl.style.top  = (window.innerHeight - 24) + 'px';
-    }
+    if (r) { toastEl.style.left = (r.left + r.width/2) + 'px'; toastEl.style.top  = (r.top) + 'px'; }
+    else   { toastEl.style.left = '50%'; toastEl.style.top  = (window.innerHeight - 24) + 'px'; }
     toastEl.classList.add('show');
     clearTimeout(showToastNear._t);
     showToastNear._t = setTimeout(()=> toastEl.classList.remove('show'), 1400);
   }
 
-  /* [ANCHOR:SHARE] — сохраняем loopOn (и текущие режимы) */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToastNear(shareBtn, 'Загрузи Lottie'); return; }
       try {
-        const payload = {
-          v: 1,
-          lot: lastLottieJSON,
-          bg:  bgImg.src || null,
-          opts: { loop: loopOn, wide: !!wide, fullH: !!fullH }
-        };
+        const payload = { v:1, lot:lastLottieJSON, bg:bgImg.src || null, opts:{ loop:loopOn, wide:!!wide, fullH:!!fullH } };
         const resp = await fetch('/api/share', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload) });
         if (!resp.ok) throw new Error('share failed');
         const data = await resp.json();
@@ -286,23 +264,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try { await navigator.clipboard.writeText(link); }
         catch(_){
-          const ta = document.createElement('textarea');
-          ta.value = link; document.body.appendChild(ta);
-          ta.style.position='fixed'; ta.style.left='-9999px';
-          ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+          const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta);
+          ta.style.position='fixed'; ta.style.left='-9999px'; ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         }
         showToastNear(shareBtn, 'Ссылка скопирована');
       } catch(err) {
-        console.error(err);
-        showToastNear(shareBtn, 'Ошибка при шаринге');
+        console.error(err); showToastNear(shareBtn, 'Ошибка при шаринге');
       }
     });
   }
 
-  /* [ANCHOR:LOAD_FROM_LINK] — восстановление по короткой ссылке */
   (async function loadIfLinked(){
     const id = new URLSearchParams(location.search).get('id');
-    if (!id) { if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale(); return; }
+    if (!id) { MOBILE ? updateMobilePreviewScale() : applyDesktopScale(); return; }
     try {
       const resp = await fetch('/api/shot?id=' + encodeURIComponent(id));
       if (!resp.ok) throw new Error('404');
@@ -328,13 +302,13 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       if (snap.lot) { lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
-      else { if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale(); }
+      else { MOBILE ? updateMobilePreviewScale() : applyDesktopScale(); }
     } catch(e){
       console.error(e);
-      if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
+      MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
     }
   })();
 
   // первичный рендер
-  if (MOBILE) updateMobilePreviewScale(); else applyDesktopScale();
+  MOBILE ? updateMobilePreviewScale() : applyDesktopScale();
 });
