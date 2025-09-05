@@ -1,7 +1,7 @@
 'use strict';
 
 /* [ANCHOR:VERSION_CONST] */
-const VERSION = 'v40-mobile-scale-box_360x800_lottie-fit-height';
+const VERSION = 'v44-fitHeight_everywhere_mobileScaleByWidth';
 
 /* [ANCHOR:BOOT] */
 document.addEventListener('DOMContentLoaded', function () {
@@ -29,7 +29,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var wide = false;     // 360 / 1000 (десктоп)
   var fullH = false;    // 800 / экран (десктоп)
   var lastLottieJSON = null;
-  var bgNatW = 0, bgNatH = 0; // натуральные размеры фона
   var MOBILE = isMobile();
 
   /* [ANCHOR:VERSION_BADGE_SET] */
@@ -69,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
     wrapper.style.width  = targetW + 'px';
     wrapper.style.height = targetH + 'px';
 
-    // preview повторяет wrapper на десктопе (внутри 360×800 или 1000×800 логически)
+    // preview повторяет wrapper на десктопе
     preview.style.left = '0'; preview.style.top = '0';
     preview.style.width  = '100%';
     preview.style.height = '100%';
@@ -88,34 +87,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* =====================  М О Б И Л Ь Н Ы Й  ===================== */
 
-  /* [ANCHOR:LOAD_BG_META] — читаем натуральные размеры загрузленного фона (для инфо, но логика не зависит) */
-  function loadBgMeta(src){
-    return new Promise(resolve=>{
-      const img = new Image();
-      img.onload = function(){
-        bgNatW = img.naturalWidth || img.width  || 0;
-        bgNatH = img.naturalHeight|| img.height || 0;
-        resolve();
-      };
-      img.src = src;
-    });
-  }
-
   /* [ANCHOR:MOBILE_PREVIEW_SCALE]
-     Коробочка превью = 360×800. Масштабируем её так, чтобы целиком поместилась на экране без скролла:
-     s = min(viewportWidth/360, viewportHeight/800).
-     Центруем по экрану. Внутренности (фон IMG высотой 100%, Lottie высотой 100%) сохраняют исходную логику.
+     Коробочка превью = 360×800. Масштабируем её по ШИРИНЕ экрана: s = viewportWidth / 360.
+     Центруем по экрану. Высота может выйти за пределы — это нормально, wrapper обрежет без влияния на содержимое.
   */
   function updateMobilePreviewScale(){
     if (!MOBILE) return;
     const vw = (window.visualViewport && window.visualViewport.width)  ? window.visualViewport.width  : window.innerWidth;
-    const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-
-    const sW = vw / 360;
-    const sH = vh / 800;
-    const s  = Math.min(sW, sH); // чтобы не было скролла и вся коробка поместилась
-
-    // центрируем
+    const s  = vw / 360;
     preview.style.transform = `translate(-50%, -50%) scale(${s})`;
   }
 
@@ -126,7 +105,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Тап по превью = повтор
     wrapper.addEventListener('click', function(e){
-      if (e.target.closest && e.target.closest('.mode')) return; // на всякий случай
+      if (e.target.closest && e.target.closest('.mode')) return;
       if (!anim) return;
       try { anim.stop(); anim.goToAndPlay(0, true); } catch(_){}
     });
@@ -139,11 +118,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(){
+    reader.onload = function(){
       const src = String(reader.result);
       bgImg.src = src;
-      await loadBgMeta(src);
-      updateMobilePreviewScale(); // масштаб на мобиле не зависит от фона, но пусть обновится
       try { e.target.value=''; } catch(_){}
     };
     reader.readAsDataURL(file);
@@ -163,7 +140,8 @@ document.addEventListener('DOMContentLoaded', function () {
     animName = uid('anim_');
     lastLottieJSON = animationData;
 
-    const preserve = 'xMidYMid meet'; // вписаться по высоте контейнера превью
+    // ВАЖНО: slice => масштаб по высоте контейнера, кроп по ширине, центрирование
+    const preserve = 'xMidYMid slice';
     afterTwoFrames(function(){
       anim = lottie.loadAnimation({
         name: animName,
@@ -182,16 +160,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
           if (svg) {
             svg.removeAttribute('width'); svg.removeAttribute('height');
-            svg.style.height='100%'; svg.style.width='auto';
+            svg.style.width='100%'; svg.style.height='100%';
             svg.style.position='static'; svg.style.margin='0 auto';
-            svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+            svg.setAttribute('preserveAspectRatio','xMidYMid slice');
           }
           if (canvas) {
-            canvas.style.height='100%'; canvas.style.width='auto';
+            canvas.style.width='100%'; canvas.style.height='100%';
             canvas.style.position='static'; canvas.style.margin='0 auto';
           }
         } catch(_){}
-        updateMobilePreviewScale();
+        if (MOBILE) updateMobilePreviewScale();
       });
     });
   }
@@ -223,14 +201,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!on && anim.isPaused) { try { anim.goToAndStop(0, true); } catch(_ ){} }
   });
 
-  /* [ANCHOR:SHARE] — короткая ссылка с тостом НАД кнопкой */
+  /* [ANCHOR:TOAST_API] — тост НАД кнопкой */
   function showToastNear(el, msg){
     if (!toastEl) return;
     toastEl.textContent = msg;
     const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
     if (r) {
       toastEl.style.left = (r.left + r.width/2) + 'px';
-      toastEl.style.top  = (r.top) + 'px'; // сам подъём — через CSS translate(-100% - 8px)
+      toastEl.style.top  = (r.top) + 'px'; // подъём выше — через CSS translate
     } else {
       toastEl.style.left = '50%';
       toastEl.style.top  = (window.innerHeight - 24) + 'px';
@@ -240,6 +218,7 @@ document.addEventListener('DOMContentLoaded', function () {
     showToastNear._t = setTimeout(()=> toastEl.classList.remove('show'), 1400);
   }
 
+  /* [ANCHOR:SHARE] — короткая ссылка с тостом НАД кнопкой */
   if (shareBtn){
     shareBtn.addEventListener('click', async function(){
       if (!lastLottieJSON){ showToastNear(shareBtn, 'Загрузи Lottie'); return; }
@@ -275,15 +254,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!resp.ok) throw new Error('404');
       const snap = await resp.json();
 
-      if (snap.bg) {
-        bgImg.src = snap.bg;
-        await loadBgMeta(snap.bg);
-      }
-      if (snap.lot) {
-        lastLottieJSON = snap.lot; loadLottieFromData(snap.lot);
-      } else if (MOBILE) {
-        updateMobilePreviewScale();
-      }
+      if (snap.bg)  bgImg.src = snap.bg;
+      if (snap.lot) { lastLottieJSON = snap.lot; loadLottieFromData(snap.lot); }
+      else if (MOBILE) updateMobilePreviewScale();
     } catch(e){
       console.error(e);
       if (MOBILE) updateMobilePreviewScale();
