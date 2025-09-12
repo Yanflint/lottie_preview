@@ -1,0 +1,293 @@
+/* ===================== Т О К Е Н Ы  И  Б А З А ===================== */
+:root{
+  --bg:#0b0c10; --muted:#9aa3b2;
+  --accent:#6ee7b7; --accent-orange:#FF7700;
+  --preview-bg:#0b0f1a;
+
+  /* запас под панель/отступы, чтобы превью не упиралось в край окна */
+  --controls-space: 150px;
+
+  /* UI-параметры */
+  --ctl-h: 36px;
+  --btn-font: 13px;
+  --btn-pad-y: 8px;
+  --btn-pad-x: 12px;
+  --btn-radius: 12px;
+  --wrap-r: 16px;
+  --btn-dim-bg: #525b72;
+
+  /* расстояние между превью и блоком кнопок */
+  --stack-gap: 16px;
+}
+
+*{ box-sizing: border-box; }
+html, body{ height:100%; }
+body{
+  margin:0;
+  color:#dce3ef;
+  background:var(--bg);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, Helvetica, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji;
+}
+
+/* ===================== В Ы Р А В Н И В А Н И Е  С Е Т К И ===================== */
+.page{
+  min-height:100dvh;
+  display:grid;
+  place-items:center;
+  padding:16px;
+}
+
+.app{
+  width:100%;
+  max-width:1000px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:var(--stack-gap);
+  position:relative; /* для локальных z-index */
+  z-index:0;
+}
+
+/* ===================== П Р Е В Ь Ю  ===================== */
+/* Контейнер превью подстраивается под картинку:
+   --preview-h  : базовая высота (естественная высота картинки в px с учётом @2x/@3x)
+   --preview-ar : соотношение сторон (w/h) уже после деления на scale
+   Фолбэк — старое поведение (800px и 360/800). */
+.wrapper{
+  position: relative;
+  z-index: 0;              /* превью ниже контролов */
+  height: var(--preview-h, 800px);
+  aspect-ratio: var(--preview-ar, 360 / 800);
+  width: auto;
+
+  /* Влезаем в окно, сохраняя пропорции */
+  max-height: calc(100dvh - var(--controls-space));
+  max-width:  min(100vw - 32px, 1000px);
+
+  border: none; outline: none;
+  border-radius: var(--wrap-r);
+  overflow: visible; /* нужно, чтобы пунктир выглядывал наружу */
+}
+
+/* Пунктирная рамка: не мешает кликам и не перекрывает контролы */
+.wrapper::after{
+  content:"";
+  position:absolute;
+  inset:-6px;
+  border:2px dashed #2b334a;
+  border-radius: calc(var(--wrap-r) + 6px);
+  pointer-events:none;
+  z-index:1;
+}
+
+.preview{
+  position:absolute; inset:0;
+  overflow:hidden;
+  z-index:0; /* ниже ::after, но внутри wrapper */
+}
+
+.bg, .lottie-layer{ position:absolute; inset:0; }
+.bg{
+  overflow:hidden; display:flex; align-items:center; justify-content:center;
+}
+
+/* По умолчанию: подгоняем по высоте контейнера (контейнер уже держит aspect-ratio) */
+.bg img{ display:block; height:100%; width:auto; margin:0 auto; }
+
+.lottie-layer{ overflow:hidden; }
+.lot-stage{
+  position:absolute; left:50%; top:50%;
+  transform-origin:50% 50%;
+}
+.lottie-mount{ width:100%; height:100%; }
+
+/* Плейсхолдер */
+.placeholder{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--muted); font-size:13px; letter-spacing:.2px;
+  background:var(--preview-bg);
+  border:none; border-radius:12px; text-align:center; padding:12px;
+}
+.placeholder.hidden{ display:none; }
+.placeholder .ph{
+  display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center;
+}
+.placeholder .ph-1{ font-weight:700; }
+.placeholder .ph-2{ opacity:.8; }
+
+/* DnD-индикатор поверх всего, но только во время dnd */
+.drop-indicator{
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  z-index:1000; pointer-events:none;
+}
+.drop-indicator.active{ display:flex; }
+.drop-indicator .box{
+  color:#fff; background:rgba(0,0,0,.6); border:2px dashed rgba(255,255,255,.5);
+  padding:12px 16px; border-radius:12px; font-weight:700;
+}
+
+/* ===================== К Н О П К И  ===================== */
+.controls{
+  display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap;
+  background:transparent; padding:0; border:none;
+  position: relative;
+  z-index: 5; /* поверх пунктирной рамки и превью */
+}
+
+.btn{
+  cursor:pointer; border:none; border-radius:var(--btn-radius);
+  padding:var(--btn-pad-y) var(--btn-pad-x);
+  font-weight:600; font-size:var(--btn-font); line-height:1;
+  min-height:var(--ctl-h);
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  transition:transform .05s ease, opacity .2s ease, filter .2s ease;
+  color:#0b0c10; background:var(--accent);
+}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+.btn:active{transform:translateY(1px)}
+.btn:hover:not(:disabled){ filter:brightness(1.05); }
+
+.btn.secondary { background:#273046; color:#dce3ef; border:1px solid #2e374f; }
+.btn.accent    { background:var(--accent-orange); color:#fff; }
+
+#sizeBtn, #heightBtn { background:var(--btn-dim-bg); color:#fff; }
+
+.chk{
+  display:inline-flex; align-items:center; gap:6px;
+  color:#dce3ef; background:#273046; border:1px solid #2e374f;
+  border-radius:var(--btn-radius); padding:0 var(--btn-pad-x); min-height:var(--ctl-h);
+  font-size:var(--btn-font); line-height:1;
+}
+.chk input{
+  appearance:none; width:16px; height:16px; border-radius:4px;
+  background:#1f2537; border:1px solid #32405f; display:inline-block; position:relative;
+}
+.chk input:checked{ background:#2c8e6a; border-color:#2c8e6a; }
+.chk input:checked::after{ content:""; position:absolute; inset:3px; background:#fff; border-radius:2px; }
+
+/* ===================== TOAST ===================== */
+.toast{
+  position:fixed; left:50%; top:16px; transform:translateX(-50%) translateY(-16px);
+  opacity:0; transition:transform .2s ease, opacity .2s ease;
+  background:#1f2537; color:#fff; border:1px solid #2e374f; border-radius:10px;
+  padding:10px 12px; z-index:2000; pointer-events:none; font-weight:700; letter-spacing:.2px;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ===================== В Е Р С И Я ===================== */
+.ver{
+  position:fixed; right:12px; bottom:12px; opacity:.5; font-size:12px;
+}
+
+/* ============ STANDALONE (домашний экран телефона) ============ */
+/* JS добавляет классы .is-standalone и .is-mobile на <html> */
+
+html.is-standalone.is-mobile .controls{
+  display:none !important; /* скрыть все контролы */
+}
+
+html.is-standalone.is-mobile .page{
+  padding:0; /* убрать внешние отступы */
+  min-height:100dvh;
+}
+
+html.is-standalone.is-mobile .app{
+  max-width:100vw;
+  gap:0;
+}
+
+/* Превью во весь экран телефона, по центру.
+   Если высота макета не влезает — обрежется по вертикали (overflow:hidden).
+   Пропорции не меняем. */
+html.is-standalone.is-mobile .wrapper{
+  height:100dvh;
+  max-height:100dvh;
+  width:100vw;
+  max-width:100vw;
+  margin:0;
+  border-radius:0;
+  overflow:hidden;          /* обрезаем лишнее по краям */
+}
+
+/* Декор убираем на телефоне */
+html.is-standalone.is-mobile .wrapper::after{ display:none; }
+
+/* Для этого режима картинку подгоняем по ширине экрана,
+   чтобы при высоких макетах шла обрезка по вертикали.
+   Центрирование сохраняется за счёт flex на .bg */
+html.is-standalone.is-mobile .bg img{
+  width:100vw;
+  height:auto;
+}
+
+/* ============ STANDALONE fit modes (как было) ============ */
+html.standalone .bg,
+html.standalone .lottie-layer{
+  position:absolute;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+html.standalone.fit-edge .bg,
+html.standalone.fit-edge .lottie-layer{ inset:0; }
+html.standalone.fit-edge .bg img{ width:100vw; height:auto; display:block; }
+
+html.standalone.fit-safe .bg,
+html.standalone.fit-safe .lottie-layer{
+  left:  env(safe-area-inset-left);
+  right: env(safe-area-inset-right);
+  top:   env(safe-area-inset-top);
+  bottom:env(safe-area-inset-bottom);
+}
+
+/* ===================== Update-toast ===================== */
+.update-toast{
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translate(-50%, 16px);
+  opacity: 0;
+  transition: opacity 220ms ease, transform 220ms ease;
+  background: #1f2537;
+  color: #fff;
+  border: 1px solid #2e374f;
+  border-radius: 12px;
+  padding: 12px 14px;
+  z-index: 3000;
+  pointer-events: none;
+}
+.update-toast.show{
+  opacity:1;
+  transform: translate(-50%, 0);
+}
+.update-toast .ut-text{
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+/* Меньше анимации */
+@media (prefers-reduced-motion: reduce){
+  .update-toast,
+  .update-toast.show{
+    transition: opacity 120ms ease !important;
+    transform: translate(-50%, 0) !important;
+  }
+}
+
+/* === Desktop wide overrides (added by assistant) === */
+@media (min-width: 1024px){
+  /* Снимаем лимит общей ширины приложения на desktop */
+  .app{ max-width: none; }
+
+  /* Снимаем ограничение ширины превью-контейнера */
+  .wrapper{ max-width: none; }
+
+  /* Не режем контент по краям у слоя превью только на desktop */
+  .preview{ overflow: visible; }
+
+  /* Разрешаем горизонтальный скролл при широкой картинке */
+  html, body{ overflow-x: auto; }
+}

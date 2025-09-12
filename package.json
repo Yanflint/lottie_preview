@@ -1,16 +1,12 @@
 {
-  "name": "lottie-preview-netlify",
+  "name": "wip-lottie-preview",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "netlify dev",
-    "build": "echo \"static\""
+    "build": "echo \"static\"",
+    "dev": "echo \"Use any static server (no build)\""
   },
   "dependencies": {
-    "@netlify/blobs": "^8.0.0",
-    "uuid": "^9.0.1"
-  },
-  "devDependencies": {
-    "netlify-cli": "^17.0.0"
+    "@netlify/blobs": "^8.0.0"
   }
 }

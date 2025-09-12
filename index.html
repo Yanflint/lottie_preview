@@ -2,130 +2,112 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <!-- [ANCHOR:VIEWPORT] -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Lottie-превью</title>
 
-  <!-- [ANCHOR:SCRIPTS_INCLUDE] Lottie Web -->
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#000000" />
+
+  <!-- iOS: запуск без UI Safari -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Lottie Preview" />
+  <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+
+  <!-- favicon чтобы не было 404 -->
+  <link rel="icon" type="image/png"
+        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/Urn1ogAAAAASUVORK5CYII="/>
+
+  <!-- Lottie -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js" defer></script>
 
+  <!-- ВАЖНО: абсолютный путь, чтобы работало по /s/:id -->
+  <link rel="stylesheet" href="/style.css" />
+
   <style>
-    :root { --ctl-h: 30px; }
-
-    /* [ANCHOR:CSS_BASE] */
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin: 0; background:#0f0f10; color:#e8e8e8; font-family:-apple-system,Segoe UI,Roboto,Inter,Arial; }
-
-    /* [ANCHOR:APP_WRAP] */
-    .app { max-width:1000px; margin:0 auto; padding:16px; display:flex; flex-direction:column; align-items:center; gap:12px; }
-
-    /* [ANCHOR:WRAPPER] — внешний контейнер превью */
-    .wrapper { position:relative; width:360px; height:800px; overflow:hidden; background:#000; border:none; }
-
-    /* [ANCHOR:PREVIEW] — «коробочка» превью */
-    .preview { position:absolute; inset:0; overflow:hidden; }
-
-    /* [ANCHOR:BG_LAYER] */
-    .bg, .lottie-layer { position:absolute; inset:0; }
-    .bg { overflow:hidden; display:flex; align-items:center; justify-content:center; }
-    .bg img { display:block; height:100%; width:auto; margin:0 auto; } /* фон всегда по высоте контейнера */
-
-    /* [ANCHOR:LOTTIE_LAYER] — сцена и точка монтирования */
-    .lottie-layer { overflow:hidden; }
-    .lot-stage {
-      position:absolute; left:50%; top:50%;
-      transform-origin:50% 50%;
-      /* width/height задаём из JS = номиналу Lottie; transform = translate+scale(...) */
+    /* viewer mode overrides */
+    html.viewer .controls,
+    html.viewer #mode,
+    html.viewer #dropOverlay,
+    html.viewer .placeholder { display: none !important; }
+    html.viewer .wrapper::after { display: none !important; }
+    html.viewer .wrapper {
+      max-width: none !important;
+      max-height: none !important;
+      border-radius: 0 !important;
     }
-    .lottie-mount { width:100%; height:100%; }
-
-    /* [ANCHOR:PLACEHOLDER_CSS] */
-    .placeholder{
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      color:#9aa0a6; font-size:14px; letter-spacing:.2px; background:#0b0b0c;
-      border:1px dashed #3a3a3a; border-radius:8px;
-    }
-    .placeholder.hidden{ display:none; }
-
-    /* [ANCHOR:MODE_PANEL] */
-    .mode{ display:flex; flex-wrap:wrap; gap:8px; font-size:12px; align-items:center; justify-content:center; }
-    .mode input[type="file"]{ display:none; }
-    .btn, .chk{ height:var(--ctl-h); padding:0 10px; display:inline-flex; align-items:center; gap:6px; background:#2a2a2a; color:#e8e8e8; border:none; border-radius:6px; font-size:12px; line-height:1; cursor:pointer; user-select:none; }
-    .btn:active{ opacity:.85; }
-    .chk input[type="checkbox"]{ width:14px; height:14px; margin:0; }
-
-    /* [ANCHOR:MOBILE_MODE] — на телефоне: wrapper=экран, preview=360×(высота фона), масштаб по ШИРИНЕ */
-    body.is-mobile .app{ max-width:none; padding:0; }
-    body.is-mobile .mode{ display:none !important; }
-    body.is-mobile{ overflow:hidden; }
-    body.is-mobile .wrapper{ position:fixed; inset:0; width:100vw; height:100dvh; background:#000; }
-    body.is-mobile .preview{
-      width:360px; /* логическая ширина коробочки */
-      /* высота задаётся JS: = высота загруженной картинки (или 800 до загрузки) */
-      left:50%; top:50%; transform-origin:50% 50%;
-      /* transform из JS: translate(-50%,-50%) scale(vw/360) */
-    }
-
-    /* [ANCHOR:TOAST_CSS] */
-    .toast{
-      position:fixed; padding:8px 10px; background:rgba(0,0,0,.85); color:#fff; border-radius:8px;
-      font-size:12px; opacity:0; pointer-events:none; transition:opacity .15s ease-out;
-      z-index:1000; backdrop-filter:blur(4px);
-      transform:translate(-50%, calc(-100% - 8px));
-    }
-    .toast.show{ opacity:1; }
-
-    /* [ANCHOR:VERSION_BADGE] */
-    .ver{
-      position:fixed; right:8px; bottom:6px; z-index:1000;
-      font-size:11px; line-height:1; padding:4px 6px; color:#bbb;
-      background:rgba(0,0,0,.4); border-radius:6px; pointer-events:none; user-select:none;
-    }
-    /* скрыть версию на мобиле */
-    body.is-mobile .ver{ display:none !important; }
+    html.viewer body, html.viewer html { background: #000; }
   </style>
 </head>
-<body>
-  <div class="app"><!-- [ANCHOR:APP_ROOT] -->
-    <div id="wrapper" class="wrapper" aria-label="Область превью"><!-- [ANCHOR:WRAPPER_NODE] -->
-      <div id="preview" class="preview"><!-- [ANCHOR:PREVIEW_NODE] -->
-        <div id="ph" class="placeholder">Загрузите изображение</div><!-- [ANCHOR:PLACEHOLDER_NODE] -->
-        <div class="bg"><img id="bgImg" alt=""></div><!-- [ANCHOR:BG_IMG] -->
 
-        <div class="lottie-layer"><!-- [ANCHOR:LOTTIE_LAYER_NODE] -->
-          <div id="lotStage" class="lot-stage"><!-- [ANCHOR:LOT_STAGE] -->
-            <div id="lottie" class="lottie-mount"></div><!-- [ANCHOR:LOTTIE_MOUNT] -->
+
+<body>
+  <script>
+    // bootstrap viewer class ASAP
+    (function(){ try { if(/^\/s\//.test(location.pathname)) document.documentElement.classList.add('viewer'); } catch(e){} })();
+  </script>
+
+  <div class="page">
+    <div class="app">
+
+      <div id="wrapper" class="wrapper" aria-label="Область превью">
+        <div id="preview" class="preview">
+          <div id="ph" class="placeholder">
+            <div class="ph">
+              <div class="ph-1">Перетащите файл:</div>
+              <div class="ph-2">PNG / JSON</div>
+            </div>
+          </div>
+
+          <div class="bg"><img id="bgImg" alt=""></div>
+
+          <div class="lottie-layer">
+            <div id="lotStage" class="lot-stage">
+              <div id="lottie" class="lottie-mount"></div>
+            </div>
           </div>
         </div>
 
+        <div id="dropOverlay" class="drop-overlay">
+          <div class="box">Отпустите файл здесь</div>
+        </div>
       </div>
-    </div>
 
-    <!-- [ANCHOR:CONTROL_PANEL] -->
-    <div class="mode" id="mode">
-      <label class="btn" for="bgInput">Фон</label>
-      <input id="bgInput" type="file" accept="image/*">
-      <label class="btn" for="lotInput">Lottie</label>
-      <input id="lotInput" type="file" accept="application/json,.json">
+      <div id="mode" class="controls">
+<button class="btn secondary" id="restartBtn" title="Повторить анимацию" aria-label="Повтор">▶</button>
+        <label class="chk" title="Играть зацикленно">
+          <input type="checkbox" id="loopChk"> Зацикленно
+        </label>
 
-      <button class="btn" id="sizeBtn">Ширина: 360px</button>
-      <button class="btn" id="heightBtn">Высота: 800px</button>
-
-      <button class="btn" id="restartBtn" title="Повторить анимацию">Повтор</button>
-      <label class="chk" title="Играть зацикленно"><input type="checkbox" id="loopChk"> Зацикленно</label>
-
-      <button class="btn" id="shareBtn" title="Сохранить и получить короткую ссылку">Поделиться</button>
+        <!-- стиль кнопки НЕ меняю, твой класс/градиенты сохранятся -->
+        <button class="btn accent" id="shareBtn" title="Сохранить и получить короткую ссылку">Поделиться</button>
+      </div>
     </div>
   </div>
 
-  <!-- [ANCHOR:TOAST_NODE] -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <!-- [ANCHOR:VERSION_NODE] -->
   <div id="ver" class="ver"></div>
 
-  <!-- [ANCHOR:SCRIPT_INCLUDE] -->
-  <script src="app.js?v=50"></script>
+  <!-- детектор standalone для CSS (только класс, без визуальных изменений) -->
+<script type="module">
+  const isStandalone =
+    (window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches ||
+                           window.matchMedia('(display-mode: fullscreen)').matches)) ||
+    (navigator.standalone === true);
+
+  if (isStandalone) {
+    document.documentElement.classList.add('standalone');
+
+    // Режим подгонки: ?fit=edge | ?fit=safe (по умолчанию safe)
+    const fit = new URL(location.href).searchParams.get('fit');
+    const mode = (fit === 'edge' || fit === 'safe') ? fit : 'safe';
+    document.documentElement.classList.add(`fit-${mode}`);
+  }
+</script>
+
+
+  <!-- Абсолютный путь к модулю -->
+  <script type="module" src="/src/app/main.js?v=0.01"></script>
 </body>
 </html>
